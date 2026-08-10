@@ -248,11 +248,13 @@ h1 em{font-style:normal;color:var(--shu)}
 
 /* ---------- 表題欄フッター ---------- */
 footer{border-top:1px solid var(--ink);background:var(--paper-2)}
-.block{max-width:1160px;margin:0 auto;padding:0 var(--pad);display:grid;grid-template-columns:repeat(3,1fr)}
+.block{max-width:1160px;margin:0 auto;padding:0 var(--pad);display:grid;grid-template-columns:repeat(4,1fr)}
 .block div{padding:14px 0;border-right:1px solid var(--line)}
 .block div:last-child{border-right:0}
 .block dt{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--ink-40);margin:0 0 4px}
 .block dd{margin:0;font-size:13px;font-family:var(--dis);letter-spacing:.05em}
+.block dd a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--shu)}
+.block dd a:hover{color:var(--shu)}
 @media(max-width:640px){.block{grid-template-columns:1fr 1fr}.block div{border-bottom:1px solid var(--line)}}
 
 /* ---------- 詳細シート ---------- */
@@ -608,6 +610,7 @@ body.intro-lock{overflow:hidden}
     <div><dt>事業者</dt><dd>TCS</dd></div>
     <div><dt>内容</dt><dd>PORTFOLIO</dd></div>
     <div><dt>収録</dt><dd>4 SHEETS</dd></div>
+    <div><dt>規約</dt><dd><a href="privacy.html">PRIVACY POLICY</a></dd></div>
   </div>
 </footer>
 
