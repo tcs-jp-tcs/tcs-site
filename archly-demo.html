@@ -1,0 +1,1578 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Archly</title>
+
+<!--
+================================================================================
+ Archly クライアント向けデモページ（見た目のみ・DB/API接続なし・完全オフライン）
+
+ 視点：発注する側（クライアント）のアカウントでログイン済みの状態
+       = isAdmin false。実装の管理者ゲートは全てOFFで描画している。
+================================================================================
+
+ ■ 実コードから抽出した値（推測ではなく下記ファイルから読み取り）
+
+ [1] src/app/globals.css
+     --background            : #f8fafb
+     --foreground            : #1a1a2e
+     --color-brand-primary   : #1e3a5f
+     --color-brand-accent    : #4ecdc4
+     --color-brand-accent-hover : #3dbdb4
+     body { font-family: Arial, Helvetica, sans-serif }
+       ※ root layout は next/font の Geist を CSS変数として読み込むが、
+         globals.css の body ルールが font-family を直接上書きするため
+         実際の描画は Arial/Helvetica系。デモも同じスタックにしている。
+
+ [2] コード内に直書きされているブランド色（tailwind.config は存在しない = Tailwind v4）
+     ネイビー(primary)        : #1E3A5F   hover: #2A4F7A
+     ティール(accent)         : #4ECDC4
+     ティール文字/リンク      : #3DBDB4   hover: #2FA8A0
+     ティール淡色背景         : #E8F8F7   （タスク追加フォーム / D&D中）
+     アプリ背景               : #F8FAFB
+     サイドバー背景           : #1E3A5F   境界線: #0F2340
+     サイドバー active        : bg-[#4ECDC4]/20 + text-[#4ECDC4]
+
+ [3] ステータス5段階＋自動判定値（src/lib/project-status.ts）
+     ProjectStatus = '依頼済' | '確認中' | '作成中' | '確認待ち' | '完了' | '対応中'
+     PROJECT_STATUS_COLORS = {
+       依頼済  : bg-gray-100   text-gray-700
+       確認中  : bg-blue-100   text-blue-700
+       作成中  : bg-amber-100  text-amber-700
+       確認待ち: bg-purple-100 text-purple-700
+       完了    : bg-green-100  text-green-700
+       対応中  : bg-sky-100    text-sky-700
+     }
+     ※ タスク選択肢は5段階（src/components/project/tasks-tab.tsx の STATUSES）。
+       '対応中' は案件ステータスの自動導出でのみ現れる値。
+
+ [4] 案件ステータスの自動導出（computeProjectStatus）
+     ・タスク0件            → '依頼済'
+     ・全タスクが同一ステータス → そのステータスをそのまま案件ステータスにする
+     ・混在                 → '対応中'
+     案件詳細のバッジには title="依頼のステータスから自動判定" が付く。
+     デモもこの関数をそのまま移植（後述 computeProjectStatus）。
+
+ [5] 提出期限の色分け（src/lib/deadline.ts）
+     deadlineDiffDays: 双方 00:00:00 に丸めて floor((期限 - 今日)/1日)
+     deadlineLevel   : diff <= 1 → 'urgent' / diff <= 3 → 'soon' / それ以外 'none'
+     deadlineColorClass: urgent → text-red-600 / soon → text-yellow-600 / none → text-gray-500
+     ※ 期限切れ（diff が負）も 'urgent'（赤）。完了案件でも期限が過去なら赤になる。
+     表示形式: new Date(deadline).toLocaleDateString('ja-JP') → 例 2026/8/10
+
+ [6] クライアント（isAdmin = false）で消える／変わるUI ← 今回の視点
+     実装の管理者ゲートは以下の6箇所。本デモは全てクライアント側の表示にしている。
+       a. layout/sidebar.tsx:113        → 「ユーザー管理」リンクを出さない
+       b. app/(dashboard)/page.tsx:177  → clientOptions を取得しない
+          + create-project-button.tsx:81 → 新規案件作成モーダルの「依頼元」select を出さない
+       c. project/project-header.tsx:231 → 案件詳細の「編集」「削除」を出さない
+       d. project/tasks-tab.tsx:170      → 依頼の「削除」は canDelete = created_by === 自分 のときだけ
+                                           （制作側が追加した依頼には削除ボタンが出ない）
+       e. archive/page.tsx:63,89         → アーカイブ表の「操作」列そのものが無くなる
+       f. admin/users/page.tsx           → notFound()。クライアントは画面自体に到達できない
+     一方で以下は権限に関係なく全員が操作できる（実装どおりデモにも残している）：
+       ・「新規案件作成」ボタン
+       ・依頼タブの「＋ 依頼を追加」と、各依頼のステータス変更 select
+       ・ファイルの追加／フォルダの追加／ドラッグ&ドロップ
+       ・チャットの送信
+
+ [7] Tailwind v4 デフォルト色 → 実HEX（バッジ・文字色に使用）
+     gray-50 #F9FAFB / gray-100 #F3F4F6 / gray-200 #E5E7EB / gray-300 #D1D5DC
+     gray-400 #99A1AF / gray-500 #6A7282 / gray-600 #4A5565 / gray-700 #364153 / gray-900 #101828
+     blue-100 #DBEAFE / blue-700 #1447E6 / blue-200 #BEDBFF
+     amber-100 #FEF3C6 / amber-700 #BB4D00
+     purple-100 #F3E8FF / purple-700 #8200DB
+     green-100 #DCFCE7 / green-700 #008236
+     sky-100 #DFF2FE / sky-700 #0069A8
+     red-600 #E7000B / red-500 #FB2C36 / red-50 #FEF2F2 / red-300 #FFA2A2
+     yellow-600 #D08700
+
+ [8] ダッシュボード（src/app/(dashboard)/page.tsx）
+     見出し「ダッシュボード」/ 補足「参加中の案件一覧」/ ボタン「新規案件作成」
+     カード: rounded-lg border-gray-200 bg-white p-6 shadow-md（hover:shadow-lg）
+     グリッド: grid-cols-1 / sm:2 / lg:3、gap-4
+     行: バッジ → 案件名(text-lg font-semibold) → 「依頼元: {display_name}」
+         → 「作成日: {ja-JP日付}」 → 「提出期限: {ja-JP日付}」(色分け)
+         → 「依頼進捗」「{done}/{total} 完了」+ 進捗バー h-1.5 bg-[#4ECDC4] / bg-gray-200
+     並び順: created_at 降順、archived_at IS NULL のみ
+     空表示: 「案件はありません」
+     ※ 「依頼元」は client_id の表示名。クライアント本人が依頼元なので全件で自分の名前になる
+       （実装どおり。制作側が代理登録した案件も client_id は依頼元＝自分になる）
+
+ [9] レイアウト（layout/shell-client.tsx, layout/sidebar.tsx）
+     モバイルヘッダー: h-14、ハンバーガー(aria-label="メニューを開く")＋「Archly」、md未満のみ
+     サイドバー: w-64 / h-16ヘッダー（archly-icon.svg 24px ＋ 「Archly」text-xl font-bold）
+     ナビ: ダッシュボード / アーカイブ / 設定（＋管理者のみユーザー管理）、最下部「ログアウト」
+     main: bg-[#F8FAFB] p-4 md:p-8、ルートは h-[100dvh] flex-col md:flex-row
+     ブレークポイント md = 768px（Tailwind 既定）
+
+ [10] 案件詳細（projects/[id]/page.tsx, project/project-header.tsx, project/project-tabs.tsx）
+     戻る導線: 「← ダッシュボードに戻る」text-sm text-[#3DBDB4]（実装は &larr;）
+     ヘッダーカード: 案件名(text-2xl font-bold) / 「依頼元: {name}」 / 右にステータスバッジ
+                     「依頼内容」見出し＋本文(whitespace-pre-wrap)
+                     dl 3列: 「作成日」「最終更新」「提出期限」（提出期限のみ色分け・未設定は「未設定」）
+     タブ順: 依頼 / チャット / ファイル（active: border-b-2 border-[#4ECDC4] + text-[#3DBDB4]）
+
+ [11] 依頼タブ（project/tasks-tab.tsx）
+     見出し「依頼一覧」、ボタン「＋ 依頼を追加」⇔「閉じる」
+     タスクカード: バッジ → タイトル(完了は line-through + text-gray-400)
+                   → 詳細 → 「期限: {日付}」(色分け・完了は打消し) 「作成: {name}」
+                   右: 5段階の select ＋（自分が作成した依頼のみ）「削除」
+     空表示: 「依頼はまだありません」
+
+ [12] ファイルタブ（project/files-tab.tsx）
+     見出し「ファイル一覧」、ボタン「ファイルを追加」「フォルダを追加」
+     D&D領域: 「ここにファイルまたはフォルダをドラッグ&ドロップ」
+     フォルダ行: 📂/📁 ＋ 名前 ＋ (子要素数)
+     ファイル行: 📄 ＋ ファイル名(text-[#3DBDB4]) / 下段「{アップロード者} ・ {日付} ・ {サイズ}」
+                 右に「ダウンロード」ボタン
+     formatFileSize: <1024 → "N B" / <1MiB → "X.X KB" / それ以上 → "X.X MB"
+       ※ アイコンは lucide ではなく絵文字（📄📂📁）。実装の見た目をそのまま踏襲した。
+     空表示: 「まだファイルはありません」
+
+ [13] チャットタブ（project/chat-tab.tsx）
+     高さ h-[70vh] md:h-96
+     自分の発言: 右寄せ bg-[#1E3A5F] text-white、名前 text-white/70、時刻 text-blue-200
+     相手の発言: 左寄せ bg-gray-100 text-gray-900、名前 text-gray-500、時刻 text-gray-400
+     吹き出し幅: max-w-[80%] md:max-w-xs lg:max-w-md
+     時刻表示: toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})
+     入力欄 placeholder「メッセージを入力...」／ボタン「送信」
+     空表示: 「まだメッセージはありません」
+
+ [14] 新規案件作成モーダル（components/create-project-button.tsx）
+     タイトル「新規案件作成」
+     項目: 案件名*（placeholder「案件名を入力」）
+           ── 依頼元 select は管理者のみのため、クライアント視点では出ない ──
+           依頼内容（placeholder「依頼内容を入力（任意）」rows=4）
+           提出期限（type=date）
+           依頼書類名（補足「作成してほしい書類名を入力してください（任意、後から追加可能）」／
+                      placeholder「例：届出一覧」／「＋ 依頼ファイルを追加」／削除は ✕）
+     ボタン: 「キャンセル」「作成」（送信中は「作成中...」）
+     作成時の初期値: projects.status='依頼済'、タスクも '依頼済' で作成される
+
+ [15] アーカイブ（archive/page.tsx）
+     見出し「アーカイブ」／補足「「完了」から15日経過した案件は自動的にアーカイブされます。」
+     テーブル列: 案件名 / ステータス / アーカイブ日（「操作」列は管理者のみ）
+     ※ このページのバッジ配色は他画面と異なる独自定義（実装のまま再現）
+        依頼済 orange-100/orange-800、確認中 yellow-100/yellow-800、作成中 blue-100/#2FA8A0、
+        確認待ち purple-100/purple-800、完了 green-100/green-800
+     空表示: 「アーカイブ済みの案件はありません。」
+
+ [16] 設定（settings/page.tsx）… 権限に関係なく全員が見られる
+     「設定」「プロフィール・パスワード・通知を変更できます。」
+     セクション プロフィール / パスワード変更 / プッシュ通知（文言はコード通り）
+
+ ■ TODO: 要確認（実装に存在せず、デモ用に追加した箇所）
+   下記は該当マークアップの直前にも「TODO: 要確認」のHTMLコメントを入れている。
+   T1. チャットの「既読」表示           … 実装なし（messages に read_at 等のカラム・処理は grep 0件）
+   T2. チャット一覧の「未読バッジ」     … 実装なし
+   T3. 案件横断の「チャット」画面       … 実装なし（チャットは案件詳細のタブのみ）
+   T4. ダッシュボードのステータス絞り込み … 実装なし
+   T5. チャットへのファイル添付         … 実装なし（本文テキストのみ。ファイルは別タブ）
+       デモの「〇〇.pdf を追加しました」は"人が手入力した文章"として表現している
+   T6. チャットの日付区切り             … 実装は時刻のみ表示。デモは可読性のため日付を表示
+   ※ 会社名・人名・案件名はすべて架空。
+================================================================================
+-->
+
+<style>
+/* ---------------------------------------------------------------
+   トークン（上記 [1][2][7] の抽出値）
+   --------------------------------------------------------------- */
+:root{
+  --bg:#F8FAFB;
+  --fg:#1A1A2E;
+  --navy:#1E3A5F;
+  --navy-hover:#2A4F7A;
+  --navy-border:#0F2340;
+  --accent:#4ECDC4;
+  --accent-text:#3DBDB4;
+  --accent-text-hover:#2FA8A0;
+  --accent-soft:#E8F8F7;
+
+  --gray-50:#F9FAFB;
+  --gray-100:#F3F4F6;
+  --gray-200:#E5E7EB;
+  --gray-300:#D1D5DC;
+  --gray-400:#99A1AF;
+  --gray-500:#6A7282;
+  --gray-600:#4A5565;
+  --gray-700:#364153;
+  --gray-900:#101828;
+
+  --red-600:#E7000B;
+  --red-500:#FB2C36;
+  --red-300:#FFA2A2;
+  --red-50:#FEF2F2;
+  --yellow-600:#D08700;
+  --blue-200:#BEDBFF;
+}
+
+*,*::before,*::after{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  /* globals.css と同一 */
+  font-family:Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit;}
+button{cursor:pointer;}
+a{text-decoration:none;}
+h1,h2,h3,h4,p,dl,dd,dt,ul{margin:0;}
+
+/* ---------------------------------------------------------------
+   シェル（shell-client.tsx）
+   --------------------------------------------------------------- */
+.shell{display:flex;flex-direction:column;height:100dvh;}
+.mobile-header{
+  display:flex;align-items:center;justify-content:space-between;
+  height:56px;background:#fff;border-bottom:1px solid var(--gray-200);
+  padding:0 16px;flex:0 0 auto;
+}
+.mobile-header h1{font-size:18px;line-height:28px;font-weight:700;color:var(--gray-900);}
+.burger{
+  margin-left:-8px;padding:8px;border:0;background:transparent;border-radius:6px;color:var(--gray-700);
+  display:flex;align-items:center;justify-content:center;
+}
+.burger:hover{background:var(--gray-100);}
+.header-spacer{width:40px;}
+
+.sidebar-desktop{display:none;}
+.drawer{position:fixed;inset:0;z-index:40;}
+.drawer-scrim{position:absolute;inset:0;background:rgba(0,0,0,.5);}
+.drawer-panel{position:absolute;top:0;bottom:0;left:0;width:256px;box-shadow:0 20px 25px -5px rgba(0,0,0,.1),0 8px 10px -6px rgba(0,0,0,.1);}
+
+.main{flex:1 1 auto;overflow-y:auto;background:var(--bg);padding:16px;}
+
+/* サイドバー（sidebar.tsx） */
+.sidebar{
+  display:flex;flex-direction:column;height:100%;width:256px;
+  background:var(--navy);border-right:1px solid var(--navy-border);color:#fff;
+}
+.sidebar-head{
+  display:flex;align-items:center;gap:8px;height:64px;
+  border-bottom:1px solid rgba(255,255,255,.1);padding:0 24px;
+}
+.sidebar-head h1{font-size:20px;line-height:28px;font-weight:700;color:#fff;}
+.sidebar-nav{flex:1 1 auto;padding:16px 12px;}
+.nav-link{
+  display:flex;align-items:center;gap:12px;width:100%;
+  border:0;background:transparent;text-align:left;
+  border-radius:6px;padding:8px 12px;font-size:14px;line-height:20px;font-weight:500;
+  color:#E5E7EB;margin-bottom:4px;position:relative;
+}
+.nav-link:hover{background:rgba(255,255,255,.1);color:#fff;}
+.nav-link.active{background:rgba(78,205,196,.2);color:var(--accent);}
+.nav-link.active:hover{background:rgba(78,205,196,.2);color:var(--accent);}
+.nav-link svg{width:20px;height:20px;flex:0 0 auto;}
+.sidebar-foot{border-top:1px solid rgba(255,255,255,.1);padding:12px;}
+
+/* ---------------------------------------------------------------
+   共通パーツ
+   --------------------------------------------------------------- */
+.page-title{font-size:24px;line-height:32px;font-weight:700;color:var(--gray-900);}
+.page-sub{margin-top:4px;color:var(--gray-600);font-size:16px;line-height:24px;}
+.row-between{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+
+.btn-primary{
+  background:var(--navy);color:#fff;border:0;border-radius:8px;
+  padding:8px 16px;font-size:14px;line-height:20px;font-weight:500;white-space:nowrap;
+}
+.btn-primary:hover{background:var(--navy-hover);}
+.btn-primary.sm{border-radius:6px;padding:6px 12px;}
+.btn-primary.md{border-radius:6px;}
+.btn-outline{
+  background:#fff;color:var(--gray-700);border:1px solid var(--gray-300);
+  border-radius:6px;padding:8px 16px;font-size:14px;line-height:20px;font-weight:500;
+}
+.btn-outline:hover{background:var(--gray-50);}
+.btn-outline-navy{
+  background:#fff;color:var(--navy);border:1px solid var(--navy);
+  border-radius:6px;padding:8px 16px;font-size:14px;line-height:20px;font-weight:500;
+}
+.btn-outline-navy:hover{background:var(--gray-50);}
+.btn-xs{
+  background:#fff;border:1px solid var(--gray-300);border-radius:6px;
+  padding:4px 12px;font-size:12px;line-height:16px;font-weight:500;color:var(--gray-700);
+}
+.btn-xs:hover{background:var(--gray-50);}
+.link-teal{color:var(--accent-text);font-size:14px;line-height:20px;background:none;border:0;padding:0;}
+.link-teal:hover{color:var(--accent-text-hover);}
+
+.panel{background:#fff;border:1px solid var(--gray-200);border-radius:8px;box-shadow:0 1px 2px 0 rgba(0,0,0,.05);}
+.panel-pad{padding:24px;}
+
+.badge{
+  display:inline-block;border-radius:9999px;padding:2px 10px;
+  font-size:12px;line-height:16px;font-weight:500;white-space:nowrap;
+}
+.badge-lg{padding:4px 12px;font-size:14px;line-height:20px;}
+/* [3] PROJECT_STATUS_COLORS */
+.st-依頼済{background:var(--gray-100);color:var(--gray-700);}
+.st-確認中{background:#DBEAFE;color:#1447E6;}
+.st-作成中{background:#FEF3C6;color:#BB4D00;}
+.st-確認待ち{background:#F3E8FF;color:#8200DB;}
+.st-完了{background:#DCFCE7;color:#008236;}
+.st-対応中{background:#DFF2FE;color:#0069A8;}
+
+/* [5] deadlineColorClass */
+.dl-urgent{color:var(--red-600);}
+.dl-soon{color:var(--yellow-600);}
+.dl-none{color:var(--gray-500);}
+
+/* ---------------------------------------------------------------
+   ダッシュボード
+   --------------------------------------------------------------- */
+.card-grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:32px;}
+.project-card{
+  display:block;background:#fff;border:1px solid var(--gray-200);border-radius:8px;
+  padding:24px;box-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);
+  transition:box-shadow .15s;text-align:left;width:100%;cursor:pointer;
+}
+.project-card:hover{box-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);}
+.project-card h3{margin-top:8px;font-size:18px;line-height:28px;font-weight:600;color:var(--gray-900);}
+.project-meta{margin-top:8px;font-size:14px;line-height:20px;color:var(--gray-500);}
+.project-meta.dim{margin-top:4px;color:var(--gray-400);}
+.project-deadline{margin-top:4px;font-size:14px;line-height:20px;font-weight:500;}
+.progress-wrap{margin-top:12px;}
+.progress-label{display:flex;align-items:center;justify-content:space-between;font-size:12px;line-height:16px;color:var(--gray-500);}
+.progress-track{margin-top:4px;height:6px;width:100%;border-radius:9999px;background:var(--gray-200);overflow:hidden;}
+.progress-fill{height:100%;background:var(--accent);}
+
+/* 絞り込み（TODO: 要確認 = 実装にはない） */
+.filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px;}
+.filter-chip{
+  border:1px solid var(--gray-300);background:#fff;color:var(--gray-600);
+  border-radius:9999px;padding:4px 12px;font-size:12px;line-height:16px;font-weight:500;
+}
+.filter-chip:hover{background:var(--gray-50);}
+.filter-chip.on{border-color:var(--navy);background:var(--navy);color:#fff;}
+
+/* ---------------------------------------------------------------
+   案件詳細
+   --------------------------------------------------------------- */
+.back-row{margin-bottom:24px;}
+.detail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.detail-title{font-size:24px;line-height:32px;font-weight:700;color:var(--gray-900);}
+.detail-client{margin-top:4px;font-size:14px;line-height:20px;color:var(--gray-500);}
+.section-label{font-size:14px;line-height:20px;font-weight:500;color:var(--gray-500);}
+.desc-body{margin-top:4px;color:var(--gray-700);white-space:pre-wrap;font-size:16px;line-height:24px;}
+.dl-grid{display:grid;grid-template-columns:1fr;gap:16px;font-size:14px;line-height:20px;}
+.dl-grid dt{font-weight:500;color:var(--gray-500);}
+.dl-grid dd{margin:4px 0 0;color:var(--gray-900);}
+.dl-grid dd.dl-urgent{color:var(--red-600);}
+.dl-grid dd.dl-soon{color:var(--yellow-600);}
+.dl-grid dd.dl-none{color:var(--gray-500);}
+.hr-top{margin-top:16px;border-top:1px solid var(--gray-200);padding-top:16px;}
+
+.tabs{display:flex;border-bottom:1px solid var(--gray-200);}
+.tab{
+  border:0;background:transparent;padding:12px 24px;font-size:14px;line-height:20px;font-weight:500;
+  color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-1px;
+}
+.tab:hover{color:var(--gray-700);}
+.tab.active{border-bottom-color:var(--accent);color:var(--accent-text);}
+.tab-body{padding:16px;}
+
+/* 依頼タブ */
+.task-card{background:#fff;border:1px solid var(--gray-200);border-radius:8px;padding:16px;box-shadow:0 1px 2px 0 rgba(0,0,0,.05);margin-bottom:12px;}
+.task-card.done{background:var(--gray-50);}
+.task-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.task-title{margin-top:8px;font-size:16px;line-height:24px;font-weight:600;color:var(--gray-900);}
+.task-title.done{color:var(--gray-400);text-decoration:line-through;}
+.task-desc{margin-top:4px;font-size:14px;line-height:20px;color:var(--gray-600);white-space:pre-wrap;}
+.task-desc.done{color:var(--gray-400);}
+.task-foot{margin-top:8px;display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;line-height:16px;}
+.task-foot .creator{color:var(--gray-400);}
+.task-side{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:0 0 auto;}
+.status-select{border:1px solid var(--gray-300);background:#fff;border-radius:6px;padding:4px 8px;font-size:12px;line-height:16px;}
+.del-link{border:0;background:none;color:var(--red-600);font-size:12px;line-height:16px;font-weight:500;padding:0;}
+.del-link:hover{color:#9F0712;}
+.empty{padding:32px 0;text-align:center;font-size:14px;line-height:20px;color:var(--gray-400);}
+
+.add-task-form{
+  margin-bottom:16px;border:1px solid rgba(78,205,196,.4);background:rgba(232,248,247,.6);
+  border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:12px;
+}
+
+/* ファイルタブ */
+.dropzone{
+  margin-bottom:16px;border:2px dashed var(--gray-300);border-radius:6px;
+  padding:24px 16px;text-align:center;font-size:14px;line-height:20px;color:var(--gray-500);
+}
+.file-list{border:1px solid var(--gray-200);border-radius:6px;overflow:hidden;}
+.file-list > *{border-top:1px solid var(--gray-200);}
+.file-list > *:first-child{border-top:0;}
+.folder-btn{
+  display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;
+  text-align:left;padding:8px 12px;font-size:14px;line-height:20px;font-weight:500;color:#1E2939;
+}
+.folder-btn:hover{background:var(--gray-50);}
+.folder-btn .count{font-size:12px;line-height:16px;color:var(--gray-400);}
+.file-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;}
+.file-row:hover{background:var(--gray-50);}
+.file-main{min-width:0;flex:1 1 auto;}
+.file-name{display:flex;align-items:center;gap:8px;font-size:14px;line-height:20px;font-weight:500;color:var(--accent-text);}
+.file-name span.t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.file-sub{padding-left:24px;font-size:12px;line-height:16px;color:var(--gray-400);}
+.child-of-folder{border-top:0 !important;}
+
+/* チャットタブ */
+.chat{display:flex;flex-direction:column;height:70vh;}
+.chat-scroll{flex:1 1 auto;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:12px;}
+.msg{display:flex;align-items:center;gap:8px;justify-content:flex-start;}
+.msg.own{justify-content:flex-end;}
+.bubble{max-width:80%;border-radius:8px;padding:8px 16px;background:var(--gray-100);color:var(--gray-900);}
+.msg.own .bubble{background:var(--navy);color:#fff;}
+.bubble .who{margin-bottom:4px;font-size:12px;line-height:16px;font-weight:500;color:var(--gray-500);}
+.msg.own .bubble .who{color:rgba(255,255,255,.7);}
+.bubble .body{font-size:14px;line-height:20px;white-space:pre-wrap;}
+.bubble .at{margin-top:4px;font-size:12px;line-height:16px;color:var(--gray-400);}
+.msg.own .bubble .at{color:var(--blue-200);}
+.day-sep{align-self:center;background:var(--gray-100);color:var(--gray-500);border-radius:9999px;padding:2px 12px;font-size:12px;line-height:16px;}
+.read-mark{align-self:flex-end;font-size:11px;line-height:14px;color:var(--gray-400);padding-right:2px;margin-top:-6px;}
+.chat-input-row{display:flex;gap:8px;border-top:1px solid var(--gray-200);padding-top:12px;}
+.chat-input{
+  min-width:0;flex:1 1 auto;border:1px solid var(--gray-300);border-radius:6px;
+  padding:12px;font-size:16px;line-height:24px;background:#fff;
+}
+.chat-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+.chat-send{flex:0 0 auto;background:var(--navy);color:#fff;border:0;border-radius:6px;padding:12px 16px;font-size:16px;line-height:24px;font-weight:500;}
+.chat-send:hover{background:var(--navy-hover);}
+
+/* チャット一覧（TODO: 要確認 = 実装にはない画面） */
+.thread-list{margin-top:32px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;overflow:hidden;box-shadow:0 1px 2px 0 rgba(0,0,0,.05);}
+.thread{display:flex;align-items:flex-start;gap:12px;width:100%;border:0;background:#fff;text-align:left;padding:16px;border-top:1px solid var(--gray-200);}
+.thread:first-child{border-top:0;}
+.thread:hover{background:var(--gray-50);}
+.thread-main{min-width:0;flex:1 1 auto;}
+.thread-title{font-size:14px;line-height:20px;font-weight:600;color:var(--gray-900);}
+.thread-preview{margin-top:4px;font-size:13px;line-height:18px;color:var(--gray-500);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.thread-side{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;gap:6px;}
+.thread-time{font-size:12px;line-height:16px;color:var(--gray-400);white-space:nowrap;}
+.unread-badge{background:var(--red-500);color:#fff;border-radius:9999px;min-width:20px;height:20px;
+  display:inline-flex;align-items:center;justify-content:center;padding:0 6px;font-size:11px;font-weight:700;}
+.nav-badge{margin-left:auto;background:var(--red-500);color:#fff;border-radius:9999px;min-width:20px;height:20px;
+  display:inline-flex;align-items:center;justify-content:center;padding:0 6px;font-size:11px;font-weight:700;}
+
+/* テーブル（アーカイブ） */
+.tbl{width:100%;border-collapse:collapse;font-size:14px;line-height:20px;}
+.tbl thead{background:var(--gray-50);}
+.tbl th{text-align:left;padding:12px 24px;font-size:12px;line-height:16px;text-transform:uppercase;color:var(--gray-500);font-weight:400;}
+.tbl td{padding:12px 24px;border-top:1px solid var(--gray-200);}
+.tbl tbody tr:first-child td{border-top:0;}
+/* [15] アーカイブ画面だけ独自配色（実装のまま） */
+.ar-依頼済{background:#FFEDD4;color:#9F2D00;}
+.ar-確認中{background:#FEF9C2;color:#894B00;}
+.ar-作成中{background:#DBEAFE;color:#2FA8A0;}
+.ar-確認待ち{background:#F3E8FF;color:#6E11B0;}
+.ar-完了{background:#DCFCE7;color:#016630;}
+
+/* フォーム */
+.field{margin-bottom:16px;}
+.field > label{display:block;font-size:14px;line-height:20px;font-weight:500;color:var(--gray-700);}
+.req{color:var(--red-500);}
+.field .hint{margin-top:4px;font-size:12px;line-height:16px;color:var(--gray-500);}
+.inp{
+  margin-top:4px;display:block;width:100%;border:1px solid var(--gray-300);border-radius:6px;
+  padding:8px 12px;font-size:14px;line-height:20px;background:#fff;
+}
+.inp:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+textarea.inp{resize:vertical;}
+.task-input-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.task-input-row .inp{margin-top:0;flex:1 1 auto;}
+.x-btn{border:0;background:none;font-size:12px;line-height:16px;color:var(--gray-500);padding:2px 4px;}
+.x-btn:hover{color:var(--red-600);}
+.add-file-link{border:0;background:none;padding:0;font-size:14px;line-height:20px;font-weight:500;color:var(--accent-text);}
+.add-file-link:hover{color:var(--accent-text-hover);}
+
+/* モーダル */
+.overlay{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);padding:16px;}
+.modal{width:100%;max-width:448px;max-height:90vh;overflow-y:auto;background:#fff;border-radius:8px;padding:24px;
+  box-shadow:0 20px 25px -5px rgba(0,0,0,.1),0 8px 10px -6px rgba(0,0,0,.1);}
+.modal h3{font-size:18px;line-height:28px;font-weight:600;color:var(--gray-900);}
+.modal-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:16px;}
+
+/* デモ表示 */
+.demo-flag{
+  position:fixed;top:10px;right:12px;z-index:60;
+  background:rgba(26,26,46,.55);color:#fff;border-radius:9999px;
+  padding:3px 10px;font-size:11px;line-height:16px;letter-spacing:.08em;
+  pointer-events:none;backdrop-filter:blur(2px);
+}
+
+.max-2xl{max-width:672px;}
+.mt-8{margin-top:32px;}
+.mt-6{margin-top:24px;}
+.mt-4{margin-top:16px;}
+
+/* ---------------------------------------------------------------
+   レスポンシブ（Tailwind 既定の sm=640px / md=768px / lg=1024px）
+   --------------------------------------------------------------- */
+@media (min-width:640px){
+  .card-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .dl-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
+}
+@media (min-width:768px){
+  .shell{flex-direction:row;}
+  .mobile-header{display:none;}
+  .sidebar-desktop{display:block;height:100%;}
+  .drawer{display:none;}
+  .main{padding:32px;}
+  .chat{height:384px;}
+  .bubble{max-width:320px;}
+  .chat-input{padding:8px 12px;font-size:14px;line-height:20px;}
+  .chat-send{padding:8px 16px;font-size:14px;line-height:20px;}
+}
+@media (min-width:1024px){
+  .card-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .bubble{max-width:448px;}
+}
+</style>
+</head>
+<body>
+
+<div class="demo-flag">デモ</div>
+<div id="app"></div>
+
+<script>
+'use strict';
+
+/* ============================================================================
+   1. ダミーデータ（差し替えやすいよう先頭にまとめている）
+      会社名・人名・案件名はすべて架空
+      視点：発注側（クライアント）＝ 株式会社ミライエ の担当者としてログイン済み
+      相手：制作会社「株式会社クロスノート」のメンバー
+   ========================================================================== */
+
+// ログイン中のユーザー（クライアント側の担当者・管理者ではない）
+const CURRENT_USER = {
+  id: 'u-self',
+  name: '和田 彩花（ミライエ）',
+  email: 'wada@example.co.jp',
+  isAdmin: false,          // ← これを true にすると管理者ビューの分岐が復活する
+};
+
+// 制作側メンバー（チャットの相手・ファイルのアップロード者として登場）
+const VENDOR = {
+  director: '神谷 湊（クロスノート）',
+  designer: '白石 実咲（クロスノート）',
+  engineer: '東 拓真（クロスノート）',
+  movie:    '藤代 光（クロスノート）',
+  sns:      '南 かなえ（クロスノート）',
+};
+
+// 案件（すべて開いた日からの相対日数 offset で保持）
+const PROJECTS = [
+  {
+    id: 'p-1',
+    name: 'コーポレートサイト リニューアル',
+    client: CURRENT_USER.name,
+    createdOffset: -32, updatedOffset: 0, deadlineOffset: 0,
+    description:
+      'コーポレートサイトのリニューアルをお願いします。現行は2019年公開で、スマホ表示がかなり崩れています。\n' +
+      'ページ数は全28P、うち10Pは既存流用、18Pは構成から作り直したいです。\n' +
+      'トップの上部はブランドムービー（別案件で制作中）を差し込む前提で組んでください。\n' +
+      '社内レビューは水曜の定例に合わせたいので、前日中に確認用URLをいただけると助かります。\n' +
+      '公開希望は9月末、ドメインはそのままで、CMSは移行しても構いません。',
+    tasks: [
+      { title: 'サイトマップ・構成案', description: '第3階層の持ち方はB案で確定', status: '完了', deadlineOffset: -22, creator: CURRENT_USER.name },
+      { title: 'ワイヤーフレーム（全18P）', description: '社内レビュー用に一括で共有', status: '完了', deadlineOffset: -11, creator: VENDOR.director },
+      { title: 'トップページ デザイン', description: 'ファーストビューは動画差し込み前提', status: '作成中', deadlineOffset: 0, creator: VENDOR.director },
+      { title: '下層ページ デザイン（18P）', description: '', status: '作成中', deadlineOffset: 6, creator: VENDOR.designer },
+      { title: 'CMS移行の要否判断', description: '運用担当のリテラシーを踏まえて相談したい', status: '依頼済', deadlineOffset: 4, creator: CURRENT_USER.name },
+    ],
+    files: [
+      { name: '現行サイト_ページ一覧.xlsx', path: '現行サイト_ページ一覧.xlsx', size: 46080, by: CURRENT_USER.name, atOffset: -32 },
+      { name: 'ロゴ・写真素材一式.zip', path: 'ロゴ・写真素材一式.zip', size: 34603008, by: CURRENT_USER.name, atOffset: -28 },
+      { name: 'サイト構成案_v3.pdf', path: 'サイト構成案_v3.pdf', size: 1258291, by: VENDOR.director, atOffset: -24 },
+      { name: 'ワイヤーフレーム_全18P.pdf', path: 'デザイン/ワイヤーフレーム_全18P.pdf', size: 8912896, by: VENDOR.director, atOffset: -12 },
+      { name: 'トップページデザイン_A案.png', path: 'デザイン/トップページデザイン_A案.png', size: 6291456, by: VENDOR.designer, atOffset: -4 },
+    ],
+    messages: [
+      { self:true,  name:CURRENT_USER.name, day:-32, time:'09:30', text:'コーポレートサイトのリニューアルをお願いしたく、ご相談です。現行が2019年公開で、スマホがかなり崩れています。' },
+      { self:false, name:VENDOR.director,   day:-32, time:'11:15', text:'ありがとうございます。ページ数と、既存流用の可否だけ先に伺えますか。' },
+      { self:true,  name:CURRENT_USER.name, day:-32, time:'14:05', text:'全28Pで、うち10Pは流用、18Pは作り直しの想定です。現行サイト_ページ一覧.xlsx を追加しました。' },
+      { self:false, name:VENDOR.director,   day:-30, time:'10:40', text:'拝見しました。18Pぶんの構成から着手します。トップ上部にムービーを入れる件は、別案件と並行で問題ないでしょうか。' },
+      { self:true,  name:CURRENT_USER.name, day:-30, time:'13:22', text:'大丈夫です。動画は9月上旬に上がる想定なので、枠だけ確保しておいてください。' },
+      { self:false, name:VENDOR.director,   day:-24, time:'17:50', text:'サイト構成案_v3.pdf を追加しました。第3階層の持ち方をA案／B案で比較しています。' },
+      { self:true,  name:CURRENT_USER.name, day:-22, time:'09:12', text:'B案でお願いします。ただ採用ページだけは独立させたいので、そこだけ切り出してもらえますか。' },
+      { self:false, name:VENDOR.director,   day:-12, time:'18:30', text:'ワイヤーフレーム（全18P）を上げました。水曜の定例にお使いください。' },
+      { self:false, name:VENDOR.designer,   day:-4,  time:'16:45', text:'トップページデザイン_A案.png を追加しました。ファーストビューは動画差し込み前提のレイアウトです。' },
+      { self:true,  name:CURRENT_USER.name, day:-1,  time:'10:20', text:'A案の方向で進めてください。1点だけ、ニュース枠が目立ちすぎるので少し下げられますか。' },
+      { self:false, name:VENDOR.director,   day:0,   time:'09:05', text:'承知しました。ニュース枠を下げた修正版を明日中にお出しします。' },
+      { self:false, name:VENDOR.director,   day:0,   time:'09:07', text:'あわせて、下層ページのデザインも今週中に3P分だけ先行で共有します。' },
+    ],
+    unread: 2,
+  },
+  {
+    id: 'p-2',
+    name: '会員アプリ v2.1 改修（iOS / Android）',
+    client: CURRENT_USER.name,
+    createdOffset: -22, updatedOffset: -2, deadlineOffset: 1,
+    description:
+      '会員向けアプリ v2.1 の改修をお願いします。iOS / Android 両対応です。\n' +
+      '今回の主目的はログイン導線の改善で、SNSログイン（Google / Apple）の追加が必須要件です。\n' +
+      'ポイント履歴画面が重いという問い合わせが増えているので、あわせて見直したいです。\n' +
+      'ストア申請は9/5を目標にしています。審査で戻る可能性を見て、実機確認は8月中に済ませたいです。',
+    tasks: [
+      { title: 'SNSログイン（Google / Apple）実装', description: '既存のメール認証は残す', status: '作成中', deadlineOffset: 1, creator: VENDOR.engineer },
+      { title: 'ポイント履歴画面のパフォーマンス改善', description: '1年分を一括取得している箇所をページングに', status: '作成中', deadlineOffset: 1, creator: VENDOR.engineer },
+      { title: 'ストア申請用スクリーンショット差し替え', description: '6.7インチ / 5.5インチ両方', status: '作成中', deadlineOffset: 4, creator: VENDOR.designer },
+    ],
+    files: [
+      { name: '要件定義書_v2.pdf', path: '要件定義書_v2.pdf', size: 1572864, by: CURRENT_USER.name, atOffset: -22 },
+      { name: '画面遷移図.pdf', path: '画面遷移図.pdf', size: 2359296, by: VENDOR.engineer, atOffset: -18 },
+      { name: 'APIレスポンス仕様.xlsx', path: 'APIレスポンス仕様.xlsx', size: 62464, by: VENDOR.engineer, atOffset: -15 },
+      { name: '申請用スクリーンショット.zip', path: '申請用スクリーンショット.zip', size: 22020096, by: VENDOR.designer, atOffset: -3 },
+    ],
+    messages: [
+      { self:true,  name:CURRENT_USER.name, day:-22, time:'10:05', text:'アプリ v2.1 の改修をお願いします。要件定義書_v2.pdf を追加しました。SNSログインの追加が今回の必須要件です。' },
+      { self:false, name:VENDOR.engineer,   day:-22, time:'15:40', text:'拝見しました。Apple ログインを入れると審査要件でメール非公開への対応が必要ですが、その前提で大丈夫ですか。' },
+      { self:true,  name:CURRENT_USER.name, day:-21, time:'09:18', text:'大丈夫です。非公開の場合は会員IDだけ紐づけできれば問題ありません。' },
+      { self:false, name:VENDOR.engineer,   day:-18, time:'19:02', text:'画面遷移図.pdf を上げました。ログイン後の分岐が1つ増えるので、そこだけご確認ください。' },
+      { self:true,  name:CURRENT_USER.name, day:-17, time:'11:30', text:'確認しました。初回のみ規約同意を挟みたいのですが、追加は可能でしょうか。' },
+      { self:false, name:VENDOR.engineer,   day:-17, time:'14:25', text:'可能です。工数は0.5人日ほど増えます。ポイント履歴の改善と合わせても9/5申請には間に合う見込みです。' },
+      { self:true,  name:CURRENT_USER.name, day:-15, time:'08:50', text:'ではその形でお願いします。実機確認は8月中に一度こちらでも触りたいです。' },
+      { self:false, name:VENDOR.engineer,   day:-8,  time:'17:10', text:'来週半ばにTestFlightで配布できる想定です。Android は別途APKをお渡しします。' },
+      { self:false, name:VENDOR.designer,   day:-3,  time:'13:45', text:'申請用スクリーンショット.zip を追加しました。新しいログイン画面を1枚目に差し替えています。' },
+      { self:true,  name:CURRENT_USER.name, day:-2,  time:'16:20', text:'ありがとうございます。1枚目のキャッチだけ「かんたんログイン」に変更をお願いできますか。' },
+    ],
+    unread: 0,
+  },
+  {
+    id: 'p-3',
+    name: '秋冬新商品 特設LP制作',
+    client: CURRENT_USER.name,
+    createdOffset: -14, updatedOffset: -1, deadlineOffset: 3,
+    description:
+      '秋冬の新商品に合わせた特設LPの制作をお願いします。1ページ完結の縦長構成です。\n' +
+      '訴求の軸は「軽さ」で、比較表とお客様の声は必ず入れてください。\n' +
+      '商品写真は先週の撮影分を上げています。切り抜きが必要なカットが3点あります。\n' +
+      '広告からの流入が中心なので、ファーストビューは広告クリエイティブとトーンを合わせたいです。\n' +
+      '公開は9/1、その週の広告出稿に間に合わせたいです。',
+    tasks: [
+      { title: 'LP構成・コピー', description: '比較表とお客様の声は必須', status: '確認待ち', deadlineOffset: 3, creator: CURRENT_USER.name },
+      { title: 'LPデザイン（PC / SP）', description: '', status: '確認待ち', deadlineOffset: 3, creator: VENDOR.designer },
+      { title: '商品写真の切り抜き（3点）', description: '影は残さずフラットに', status: '確認待ち', deadlineOffset: 2, creator: VENDOR.designer },
+      { title: '計測タグ設置', description: 'GA4 + 広告のコンバージョンタグ', status: '確認待ち', deadlineOffset: 5, creator: CURRENT_USER.name },
+    ],
+    files: [
+      { name: '商品写真_撮影分.zip', path: '商品写真_撮影分.zip', size: 46137344, by: CURRENT_USER.name, atOffset: -11 },
+      { name: 'コピー案_v2.xlsx', path: 'コピー案_v2.xlsx', size: 38912, by: CURRENT_USER.name, atOffset: -9 },
+      { name: 'LPデザイン_PC.png', path: 'デザイン/LPデザイン_PC.png', size: 7340032, by: VENDOR.designer, atOffset: -3 },
+      { name: 'LPデザイン_SP.png', path: 'デザイン/LPデザイン_SP.png', size: 4194304, by: VENDOR.designer, atOffset: -3 },
+      { name: 'LP_デザインデータ.ai', path: 'デザイン/LP_デザインデータ.ai', size: 28311552, by: VENDOR.designer, atOffset: -2 },
+    ],
+    messages: [
+      { self:true,  name:CURRENT_USER.name, day:-14, time:'13:10', text:'秋冬新商品の特設LPをお願いします。訴求の軸は「軽さ」で、比較表とお客様の声は必ず入れたいです。' },
+      { self:false, name:VENDOR.director,   day:-14, time:'16:35', text:'承知しました。比較対象は自社の旧モデルだけでしょうか、他社も含めますか。' },
+      { self:true,  name:CURRENT_USER.name, day:-13, time:'09:40', text:'他社は入れない方針です。旧モデルとの比較だけでお願いします。' },
+      { self:true,  name:CURRENT_USER.name, day:-11, time:'18:05', text:'商品写真_撮影分.zip を追加しました。切り抜きが必要なのはIMG_0182 / 0195 / 0210の3点です。' },
+      { self:false, name:VENDOR.designer,   day:-10, time:'10:15', text:'受領しました。0210だけ背景に影が強く出ているので、切り抜き後に少し補正を入れます。' },
+      { self:true,  name:CURRENT_USER.name, day:-9,  time:'11:50', text:'助かります。コピー案_v2.xlsx も上げました。B案のコピーを軸に組んでください。' },
+      { self:false, name:VENDOR.designer,   day:-3,  time:'19:20', text:'LPデザインのPC / SPを上げました。ファーストビューは広告のトーンに寄せています。' },
+      { self:true,  name:CURRENT_USER.name, day:-2,  time:'09:05', text:'ありがとうございます。全体はこの方向で進めてください。比較表だけ、SPで横スクロールにならないようにできますか。' },
+      { self:false, name:VENDOR.designer,   day:-2,  time:'14:40', text:'SPは縦積みに切り替える形で調整します。デザインデータも上げておきました。' },
+      { self:false, name:VENDOR.director,   day:-1,  time:'17:15', text:'計測タグですが、GA4のプロパティIDと広告アカウントの発行をお願いできますか。' },
+      { self:false, name:VENDOR.director,   day:-1,  time:'17:16', text:'こちらが揃えば、公開前日には計測まで通せる想定です。' },
+    ],
+    unread: 2,
+  },
+  {
+    id: 'p-4',
+    name: 'Instagram / X 月次運用（8月分）',
+    client: CURRENT_USER.name,
+    createdOffset: -25, updatedOffset: -1, deadlineOffset: 2,
+    description:
+      '8月分のSNS運用（Instagram / X）をお願いします。投稿は Instagram 週3、X 週5の想定です。\n' +
+      '7月はリールの再生数が伸びたので、8月はリールを月4本に増やしたいです。\n' +
+      'キャンペーン告知が8/20にあるので、その週は投稿の順番を調整してください。\n' +
+      'コメント返信は平日のみで構いません。NGワードのリストは共有済みのものを使ってください。',
+    tasks: [
+      { title: '8月投稿カレンダー', description: 'キャンペーン週は順番を入れ替え', status: '確認中', deadlineOffset: 2, creator: VENDOR.sns },
+      { title: '投稿画像・リール制作（前半分）', description: 'リールは月4本', status: '確認中', deadlineOffset: 2, creator: VENDOR.sns },
+      { title: '7月分 分析レポート', description: '', status: '確認中', deadlineOffset: 3, creator: VENDOR.sns },
+    ],
+    files: [
+      { name: '分析レポート_7月.pdf', path: '分析レポート_7月.pdf', size: 3407872, by: VENDOR.sns, atOffset: -19 },
+      { name: '8月投稿カレンダー.xlsx', path: '8月投稿カレンダー.xlsx', size: 71680, by: VENDOR.sns, atOffset: -20 },
+      { name: '投稿画像_8月前半.zip', path: '投稿画像_8月前半.zip', size: 31457280, by: VENDOR.sns, atOffset: -14 },
+    ],
+    messages: [
+      { self:false, name:VENDOR.sns,        day:-20, time:'10:30', text:'8月投稿カレンダー.xlsx を追加しました。リールは4本、うち2本は商品紹介、2本はスタッフ企画で組んでいます。' },
+      { self:true,  name:CURRENT_USER.name, day:-20, time:'14:12', text:'ありがとうございます。8/20にキャンペーン告知が入るので、その週は商品紹介を先に持ってきてもらえますか。' },
+      { self:false, name:VENDOR.sns,        day:-19, time:'09:25', text:'調整しました。あわせて7月分の分析レポートも上げています。リールの完全視聴率が前月比で1.6倍でした。' },
+      { self:true,  name:CURRENT_USER.name, day:-19, time:'11:40', text:'伸びてますね。伸びた3本の共通点があれば、8月の企画に反映したいです。' },
+      { self:false, name:VENDOR.sns,        day:-18, time:'16:50', text:'冒頭1秒でテロップが動くものが強い傾向でした。8月は全リールで冒頭にテロップアニメを入れます。' },
+      { self:true,  name:CURRENT_USER.name, day:-16, time:'08:55', text:'その方向でお願いします。あと、コメント返信のトーンをもう少しやわらかくできますか。' },
+      { self:false, name:VENDOR.sns,        day:-16, time:'13:20', text:'承知しました。返信テンプレを見直して、月末の定例で共有します。' },
+      { self:false, name:VENDOR.sns,        day:-14, time:'18:05', text:'投稿画像_8月前半.zip を追加しました。8/1〜8/15分です。ご確認をお願いします。' },
+      { self:true,  name:CURRENT_USER.name, day:-12, time:'10:35', text:'8/9の投稿だけ、商品名の表記が旧名称になっています。差し替えをお願いします。' },
+      { self:false, name:VENDOR.sns,        day:-12, time:'11:02', text:'失礼しました、すぐ差し替えます。他の投稿も新名称で統一されているか一通り確認します。' },
+      { self:true,  name:CURRENT_USER.name, day:-1,  time:'17:30', text:'後半分は来週の頭にいただければ大丈夫です。よろしくお願いします。' },
+    ],
+    unread: 0,
+  },
+  {
+    id: 'p-5',
+    name: '採用ブランディング動画（60秒）',
+    client: CURRENT_USER.name,
+    createdOffset: -19, updatedOffset: -5, deadlineOffset: 16,
+    description:
+      '採用サイトのトップに置く60秒のブランディング動画をお願いします。\n' +
+      '社員インタビュー3名＋オフィスのイメージカットで構成したいです。\n' +
+      '撮影は9/3に本社で、半日を押さえています。インタビューは1人あたり30分想定です。\n' +
+      'ナレーションは入れず、テロップ中心でお願いします。BGMは明るすぎない方向で。\n' +
+      'コーポレートサイトのトップにも同素材の15秒版を置きたいので、そちらも併せてご相談させてください。',
+    tasks: [
+      { title: '撮影日程の調整', description: '9/3（水）本社・半日で確定', status: '完了', deadlineOffset: -12, creator: CURRENT_USER.name },
+      { title: '構成台本', description: 'テロップ中心・ナレーションなし', status: '完了', deadlineOffset: -10, creator: VENDOR.movie },
+      { title: '仮編集（60秒版）', description: '', status: '作成中', deadlineOffset: 16, creator: VENDOR.movie },
+      { title: '撮影（本社・半日）', description: 'インタビュー3名＋イメージカット', status: '依頼済', deadlineOffset: 12, creator: VENDOR.movie },
+      { title: '15秒版の切り出し', description: 'コーポレートサイト用', status: '依頼済', deadlineOffset: 20, creator: CURRENT_USER.name },
+    ],
+    files: [
+      { name: '参考動画_リンクまとめ.pdf', path: '参考動画_リンクまとめ.pdf', size: 512000, by: CURRENT_USER.name, atOffset: -18 },
+      { name: '構成台本_v4.pdf', path: '構成台本_v4.pdf', size: 892928, by: VENDOR.movie, atOffset: -13 },
+      { name: 'インタビュー_質問案.xlsx', path: 'インタビュー_質問案.xlsx', size: 27648, by: CURRENT_USER.name, atOffset: -12 },
+      { name: '仮編集_v2.mp4', path: '編集/仮編集_v2.mp4', size: 82264064, by: VENDOR.movie, atOffset: -5 },
+    ],
+    messages: [
+      { self:true,  name:CURRENT_USER.name, day:-19, time:'09:50', text:'採用サイト用に60秒のブランディング動画をお願いしたいです。参考動画_リンクまとめ.pdf を追加しました。' },
+      { self:false, name:VENDOR.movie,      day:-19, time:'13:15', text:'ありがとうございます。参考の2本目のトーンが近いイメージでしょうか。ナレーションの有無だけ先に決めさせてください。' },
+      { self:true,  name:CURRENT_USER.name, day:-18, time:'10:05', text:'2本目が近いです。ナレーションは入れず、テロップ中心でお願いします。' },
+      { self:false, name:VENDOR.movie,      day:-16, time:'17:40', text:'撮影日ですが、9/2か9/3の午後で押さえられますか。機材の都合で午前だと少しタイトです。' },
+      { self:true,  name:CURRENT_USER.name, day:-15, time:'09:20', text:'9/3の午後でお願いします。13時から本社の会議室を半日押さえました。' },
+      { self:false, name:VENDOR.movie,      day:-13, time:'18:55', text:'構成台本_v4.pdf を上げました。インタビューは3名それぞれ2問ずつの想定です。' },
+      { self:true,  name:CURRENT_USER.name, day:-12, time:'11:30', text:'台本OKです。質問案をこちらでも作ったので、すり合わせさせてください。' },
+      { self:false, name:VENDOR.movie,      day:-11, time:'14:10', text:'拝見しました。3つ目の質問は答えが長くなりがちなので、当日は聞き方を少し変えます。' },
+      { self:false, name:VENDOR.movie,      day:-5,  time:'20:30', text:'先に手持ちの素材で仮編集_v2.mp4 を作りました。尺感とテロップの出方だけ見ていただけますか。' },
+      { self:true,  name:CURRENT_USER.name, day:-4, time:'09:15', text:'拝見しました。尺は問題ないです。テロップの表示が少し速いので、1カットあたり0.5秒ほど長くできますか。' },
+      { self:false, name:VENDOR.movie,      day:-4, time:'11:40', text:'調整します。撮影後の本編集でも同じ設定を基準にしますね。' },
+    ],
+    unread: 0,
+  },
+  {
+    id: 'p-6',
+    name: '新規事業ロゴ・ブランドガイドライン',
+    client: CURRENT_USER.name,
+    createdOffset: -3, updatedOffset: -1, deadlineOffset: 25,
+    description:
+      '新規事業（サブスク型の食品宅配）のロゴとブランドガイドラインをお願いします。\n' +
+      'サービス名は「ミライエデリ」で確定、商標の確認は法務で進めています。\n' +
+      'ロゴは横組み・縦組み・シンボル単体の3パターンが必要です。\n' +
+      'ガイドラインは配色・余白・禁止事例まで含めて、社外パートナーに渡せる粒度でお願いします。\n' +
+      '社内コンペではなく、3案から選ぶ形で進めたいです。',
+    tasks: [
+      { title: 'ロゴ案（3案）', description: '横組み・縦組み・シンボル単体', status: '依頼済', deadlineOffset: 18, creator: CURRENT_USER.name },
+      { title: 'ブランドカラー・タイポグラフィ選定', description: '', status: '依頼済', deadlineOffset: 22, creator: CURRENT_USER.name },
+      { title: 'ブランドガイドライン（PDF）', description: '禁止事例まで含める', status: '依頼済', deadlineOffset: 25, creator: CURRENT_USER.name },
+    ],
+    files: [
+      { name: 'サービス概要_社内資料.pdf', path: 'サービス概要_社内資料.pdf', size: 1835008, by: CURRENT_USER.name, atOffset: -3 },
+      { name: '参考トーン_収集.pdf', path: '参考トーン_収集.pdf', size: 4718592, by: CURRENT_USER.name, atOffset: -3 },
+    ],
+    messages: [
+      { self:true,  name:CURRENT_USER.name, day:-3, time:'11:20', text:'新規事業のロゴとブランドガイドラインをお願いします。サービス名は「ミライエデリ」で確定しました。' },
+      { self:false, name:VENDOR.director,   day:-3, time:'15:05', text:'ありがとうございます。展開先はアプリ・パッケージ・車両ラッピングあたりまで想定でしょうか。' },
+      { self:true,  name:CURRENT_USER.name, day:-3, time:'16:40', text:'その3つに加えて、配達員のユニフォームにも入れます。小さく出しても潰れない形が理想です。' },
+      { self:false, name:VENDOR.director,   day:-2, time:'09:35', text:'承知しました。シンボル単体を優先して詰めます。参考トーン、拝見しました。方向性は2枚目に近いイメージで進めてよいですか。' },
+      { self:true,  name:CURRENT_USER.name, day:-2, time:'13:50', text:'2枚目の方向でお願いします。ただ、食品なので寒色に寄りすぎないようにしたいです。' },
+      { self:false, name:VENDOR.director,   day:-2, time:'17:25', text:'了解しました。3案のうち1案は暖色軸で出します。初稿は2週間ほどいただけますか。' },
+      { self:true,  name:CURRENT_USER.name, day:-1, time:'10:10', text:'大丈夫です。商標の確認結果が出たら、こちらからも共有します。' },
+      { self:false, name:VENDOR.director,   day:-1, time:'11:45', text:'助かります。商標で引っかかった場合の作り直しも見て、少し余裕を持った期限にしておきます。' },
+    ],
+    unread: 0,
+  },
+  {
+    id: 'p-7',
+    name: 'YouTubeショート 12本 一括制作',
+    client: CURRENT_USER.name,
+    createdOffset: -21, updatedOffset: -6, deadlineOffset: 9,
+    description:
+      'YouTubeショート12本の一括制作をお願いします。既存の長尺動画からの切り出しが中心です。\n' +
+      '元素材は昨年のセミナー動画6本で、1本あたり2本ずつ切り出すイメージです。\n' +
+      '冒頭2秒で内容がわかるテロップを必ず入れてください。縦型9:16です。\n' +
+      '12本を3回に分けて（4本ずつ）納品いただけると、こちらの確認が回しやすいです。',
+    tasks: [
+      { title: '切り出し候補の洗い出し', description: 'セミナー6本から24箇所を抽出、そこから12本に絞る', status: '完了', deadlineOffset: -16, creator: VENDOR.movie },
+      { title: '第1弾（4本）編集', description: '', status: '確認待ち', deadlineOffset: -5, creator: VENDOR.movie },
+      { title: '第2弾（4本）編集', description: '', status: '作成中', deadlineOffset: 9, creator: VENDOR.movie },
+      { title: '第3弾（4本）編集', description: '内容によっては差し替えの可能性あり', status: '依頼済', deadlineOffset: 20, creator: CURRENT_USER.name },
+    ],
+    files: [
+      { name: '元素材_セミナー6本.zip', path: '元素材_セミナー6本.zip', size: 94371840, by: CURRENT_USER.name, atOffset: -20 },
+      { name: '切り出しリスト.xlsx', path: '切り出しリスト.xlsx', size: 45056, by: VENDOR.movie, atOffset: -17 },
+      { name: '第1弾_4本.zip', path: '納品/第1弾_4本.zip', size: 57671680, by: VENDOR.movie, atOffset: -6 },
+      { name: 'サムネイル案.psd', path: '納品/サムネイル案.psd', size: 18874368, by: VENDOR.designer, atOffset: -6 },
+    ],
+    messages: [
+      { self:true,  name:CURRENT_USER.name, day:-21, time:'14:05', text:'YouTubeショートを12本まとめてお願いしたいです。昨年のセミナー動画6本からの切り出しを想定しています。' },
+      { self:false, name:VENDOR.movie,      day:-21, time:'16:30', text:'承知しました。1本あたり何秒を想定されていますか。30秒前後だとテンポが作りやすいです。' },
+      { self:true,  name:CURRENT_USER.name, day:-20, time:'09:15', text:'30秒前後でお願いします。元素材_セミナー6本.zip を追加しました。' },
+      { self:false, name:VENDOR.movie,      day:-17, time:'18:40', text:'切り出しリスト.xlsx を上げました。24箇所の候補から、再生が伸びそうな12本に印を付けています。' },
+      { self:true,  name:CURRENT_USER.name, day:-16, time:'10:50', text:'リスト確認しました。No.7だけは内容が古いので外して、代わりにNo.15を入れてください。' },
+      { self:false, name:VENDOR.movie,      day:-16, time:'13:05', text:'差し替えました。まず第1弾の4本から進めます。' },
+      { self:false, name:VENDOR.movie,      day:-6,  time:'19:25', text:'第1弾_4本.zip を追加しました。冒頭2秒のテロップは全本入れています。' },
+      { self:false, name:VENDOR.designer,   day:-6,  time:'19:40', text:'サムネイル案.psd も一緒に上げました。文字は3パターン用意しています。' },
+      { self:true,  name:CURRENT_USER.name, day:-4,  time:'11:35', text:'拝見しました。3本目だけBGMが会話に被って聞き取りづらいです。少し下げていただけますか。' },
+      { self:false, name:VENDOR.movie,      day:-4,  time:'15:10', text:'失礼しました、3本目のBGMを-6dBほど下げて差し替えます。第2弾も同じ設定で進めます。' },
+    ],
+    unread: 0,
+  },
+  {
+    id: 'p-8',
+    name: 'ECサイト 商品ページ改修',
+    client: CURRENT_USER.name,
+    createdOffset: -48, updatedOffset: -21, deadlineOffset: -7,
+    description:
+      'ECサイトの商品ページ改修、ありがとうございました。\n' +
+      '改修後2週間でカート追加率が改善しており、社内でも良い反応でした。\n' +
+      'バリエーション選択のUIは他カテゴリにも展開したいので、次回改めてご相談させてください。',
+    tasks: [
+      { title: '現状分析・改修方針', description: '離脱が多いのはバリエーション選択の直前', status: '完了', deadlineOffset: -40, creator: CURRENT_USER.name },
+      { title: '商品ページ デザイン改修', description: '', status: '完了', deadlineOffset: -30, creator: VENDOR.designer },
+      { title: 'バリエーション選択UIの実装', description: '', status: '完了', deadlineOffset: -22, creator: VENDOR.engineer },
+      { title: '計測タグの再設定', description: 'カート追加を個別イベント化', status: '完了', deadlineOffset: -21, creator: CURRENT_USER.name },
+    ],
+    files: [
+      { name: '商品ページ_改修前後比較.pdf', path: '商品ページ_改修前後比較.pdf', size: 5242880, by: VENDOR.designer, atOffset: -30 },
+      { name: 'バナー素材.zip', path: 'バナー素材.zip', size: 12582912, by: VENDOR.designer, atOffset: -28 },
+      { name: '計測タグ設定書.xlsx', path: '計測タグ設定書.xlsx', size: 54272, by: VENDOR.engineer, atOffset: -22 },
+    ],
+    messages: [
+      { self:true,  name:CURRENT_USER.name, day:-48, time:'10:00', text:'ECの商品ページで、カート追加の直前に離脱が多いのが気になっています。改修をご相談できますか。' },
+      { self:false, name:VENDOR.director,   day:-48, time:'14:20', text:'計測データを拝見できますか。どの分岐で落ちているかが分かると打ち手が絞れます。' },
+      { self:true,  name:CURRENT_USER.name, day:-46, time:'09:30', text:'共有しました。バリエーション選択のところで止まっている人が多そうです。' },
+      { self:false, name:VENDOR.designer,   day:-40, time:'17:15', text:'選択肢がテキストのプルダウンなのが要因だと思います。サムネイル付きの選択に変える案でどうでしょう。' },
+      { self:true,  name:CURRENT_USER.name, day:-39, time:'11:05', text:'その方向で進めてください。色違いは写真で見せた方が伝わりますね。' },
+      { self:false, name:VENDOR.designer,   day:-30, time:'18:50', text:'商品ページ_改修前後比較.pdf を追加しました。合わせてバナー素材も上げています。' },
+      { self:false, name:VENDOR.engineer,   day:-22, time:'16:40', text:'実装と計測タグの再設定が完了しました。カート追加を個別イベントで取れるようにしています。' },
+      { self:true,  name:CURRENT_USER.name, day:-21, time:'09:25', text:'ありがとうございました。数値は2週間ほど見てから改めて共有します。' },
+      { self:true,  name:CURRENT_USER.name, day:-21, time:'09:26', text:'このUIは他カテゴリにも展開したいので、その際はまたご相談させてください。' },
+    ],
+    unread: 0,
+  },
+];
+
+// アーカイブ済み案件（実装では「完了」から15日経過で自動アーカイブ）
+const ARCHIVED = [
+  { name: '会社案内パンフレット（8P）改訂', status: '完了', archivedOffset: -19 },
+  { name: '夏季キャンペーン バナー一式', status: '完了', archivedOffset: -41 },
+  { name: '展示会用 ノベルティデザイン', status: '完了', archivedOffset: -68 },
+];
+
+/* ============================================================================
+   2. 実コードから移植したロジック
+   ========================================================================== */
+
+// src/lib/project-status.ts の computeProjectStatus をそのまま移植
+function computeProjectStatus(taskStatuses) {
+  if (taskStatuses.length === 0) return '依頼済';
+  const unique = new Set(taskStatuses);
+  if (unique.size === 1) return taskStatuses[0];
+  return '対応中';
+}
+
+// src/lib/deadline.ts の移植
+function deadlineDiffDays(deadline) {
+  if (!deadline) return null;
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const target = new Date(deadline); target.setHours(0, 0, 0, 0);
+  return Math.floor((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+function deadlineLevel(deadline) {
+  const diff = deadlineDiffDays(deadline);
+  if (diff === null) return 'none';
+  if (diff <= 1) return 'urgent';
+  if (diff <= 3) return 'soon';
+  return 'none';
+}
+function deadlineColorClass(level) {
+  if (level === 'urgent') return 'dl-urgent';
+  if (level === 'soon') return 'dl-soon';
+  return 'dl-none';
+}
+function formatDeadline(d) { return d ? new Date(d).toLocaleDateString('ja-JP') : ''; }
+
+// src/components/project/files-tab.tsx の formatFileSize をそのまま移植
+function formatFileSize(bytes) {
+  if (bytes === null || bytes === undefined) return '-';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// タスクの5段階（tasks-tab.tsx の STATUSES）
+const STATUSES = ['依頼済', '確認中', '作成中', '確認待ち', '完了'];
+
+/* ============================================================================
+   3. ユーティリティ
+   ========================================================================== */
+function h(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function offsetToDate(offset, time) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + offset);
+  if (time) {
+    const [hh, mm] = time.split(':');
+    d.setHours(Number(hh), Number(mm), 0, 0);
+  }
+  return d;
+}
+function jpDate(d) { return d.toLocaleDateString('ja-JP'); }
+function jpTime(d) { return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }); }
+
+/* ============================================================================
+   4. 状態
+   ========================================================================== */
+const state = {
+  view: 'dashboard',      // dashboard | project | chats | archive | settings
+  projectId: null,
+  tab: 'tasks',           // tasks | chat | files
+  filter: 'すべて',
+  drawer: false,
+  modal: false,
+  taskFormOpen: false,
+  newTaskRows: [''],
+  newProject: { name: '', description: '', deadline: '' },
+  chatFrom: null,         // 'chats' から入った場合の戻り先
+};
+
+function projectById(id) { return PROJECTS.find(p => p.id === id); }
+function statusOf(p) { return computeProjectStatus(p.tasks.map(t => t.status)); }
+function lastMessage(p) { return p.messages.length ? p.messages[p.messages.length - 1] : null; }
+function totalUnread() { return PROJECTS.reduce((a, p) => a + (p.unread || 0), 0); }
+
+/* ============================================================================
+   5. 描画
+   ========================================================================== */
+
+const ICON = {
+  home: '<svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>',
+  chat: '<svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z"/></svg>',
+  archive: '<svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>',
+  settings: '<svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.398.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>',
+};
+
+// public/archly-icon.svg をそのままインライン化（外部参照ゼロにするため）
+const APP_ICON = '<svg width="24" height="24" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="border-radius:4px"><rect width="100" height="100" fill="#1E3A5F"/><line x1="50" y1="16" x2="18" y2="80" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round"/><line x1="50" y1="16" x2="82" y2="80" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round"/><rect x="47" y="14" width="6" height="46" fill="#FFFFFF"/><circle cx="50" cy="14" r="3.2" fill="#FFFFFF"/><path d="M 28.667 58 Q 50 52 71.333 58 L 71.333 65 Q 50 59 28.667 65 Z" fill="#4ECDC4"/><rect x="15.5" y="80" width="6" height="6" rx="1" fill="#FFFFFF"/><rect x="78.5" y="80" width="6" height="6" rx="1" fill="#FFFFFF"/></svg>';
+
+function renderSidebar() {
+  const active = (v) => state.view === v ? ' active' : '';
+  const unread = totalUnread();
+  return `
+  <aside class="sidebar">
+    <div class="sidebar-head">${APP_ICON}<h1>Archly</h1></div>
+    <nav class="sidebar-nav">
+      <button class="nav-link${active('dashboard')}" data-nav="dashboard">${ICON.home}ダッシュボード</button>
+      <!-- TODO: 要確認 — 案件横断の「チャット」画面は実アプリに存在しない（チャットは案件詳細のタブのみ）。デモ用に追加 -->
+      <button class="nav-link${active('chats')}" data-nav="chats">${ICON.chat}チャット${unread ? `<span class="nav-badge">${unread}</span>` : ''}</button>
+      <button class="nav-link${active('archive')}" data-nav="archive">${ICON.archive}アーカイブ</button>
+      <button class="nav-link${active('settings')}" data-nav="settings">${ICON.settings}設定</button>
+      <!-- 「ユーザー管理」は sidebar.tsx:113 の isAdmin ゲート内。クライアントには出ない -->
+    </nav>
+    <div class="sidebar-foot">
+      <button class="nav-link" data-act="signout">ログアウト</button>
+    </div>
+  </aside>`;
+}
+
+/* ---- ダッシュボード ---- */
+function renderDashboard() {
+  const filters = ['すべて', '依頼済', '確認中', '作成中', '確認待ち', '完了', '対応中'];
+  const list = PROJECTS.filter(p => state.filter === 'すべて' || statusOf(p) === state.filter);
+
+  const cards = list.map(p => {
+    const st = statusOf(p);
+    const total = p.tasks.length;
+    const done = p.tasks.filter(t => t.status === '完了').length;
+    const dl = offsetToDate(p.deadlineOffset);
+    const lvl = deadlineLevel(dl);
+    return `
+      <button class="project-card" data-project="${h(p.id)}">
+        <div class="row-between">
+          <span class="badge st-${h(st)}">${h(st)}</span>
+          ${p.unread ? `<!-- TODO: 要確認 — 未読バッジは実アプリに存在しない --><span class="unread-badge">${p.unread}</span>` : ''}
+        </div>
+        <h3>${h(p.name)}</h3>
+        <p class="project-meta">依頼元: ${h(p.client)}</p>
+        <p class="project-meta dim">作成日: ${h(jpDate(offsetToDate(p.createdOffset)))}</p>
+        <p class="project-deadline ${deadlineColorClass(lvl)}">提出期限: ${h(formatDeadline(dl))}</p>
+        ${total > 0 ? `
+        <div class="progress-wrap">
+          <div class="progress-label"><span>依頼進捗</span><span>${done}/${total} 完了</span></div>
+          <div class="progress-track"><div class="progress-fill" style="width:${(done / total) * 100}%"></div></div>
+        </div>` : ''}
+      </button>`;
+  }).join('');
+
+  return `
+    <div class="row-between">
+      <div>
+        <h2 class="page-title">ダッシュボード</h2>
+        <p class="page-sub">参加中の案件一覧</p>
+      </div>
+      <button class="btn-primary" data-act="open-modal">新規案件作成</button>
+    </div>
+
+    <!-- TODO: 要確認 — ステータス絞り込みは実アプリに存在しない。デモ用に追加 -->
+    <div class="filter-bar">
+      ${filters.map(f => `<button class="filter-chip${state.filter === f ? ' on' : ''}" data-filter="${h(f)}">${h(f)}</button>`).join('')}
+    </div>
+
+    ${list.length === 0
+      ? `<p class="page-sub mt-8" style="color:var(--gray-500)">案件はありません</p>`
+      : `<div class="card-grid">${cards}</div>`}
+  `;
+}
+
+/* ---- 案件詳細 ---- */
+function renderProject() {
+  const p = projectById(state.projectId);
+  if (!p) return '<p>案件が見つかりません</p>';
+  const st = statusOf(p);
+  const dl = offsetToDate(p.deadlineOffset);
+  const backLabel = state.chatFrom === 'chats' ? '&larr; チャット一覧に戻る' : '&larr; ダッシュボードに戻る';
+  const backTarget = state.chatFrom === 'chats' ? 'chats' : 'dashboard';
+
+  return `
+    <div class="back-row"><button class="link-teal" data-nav="${backTarget}">${backLabel}</button></div>
+
+    <div class="panel panel-pad">
+      <div class="detail-head">
+        <div style="flex:1 1 auto;min-width:0">
+          <h2 class="detail-title">${h(p.name)}</h2>
+          <p class="detail-client">依頼元: ${h(p.client)}</p>
+        </div>
+        <span class="badge badge-lg st-${h(st)}" title="依頼のステータスから自動判定">${h(st)}</span>
+      </div>
+
+      <div class="mt-4">
+        <h4 class="section-label">依頼内容</h4>
+        <p class="desc-body">${h(p.description)}</p>
+      </div>
+
+      <div class="hr-top">
+        <dl class="dl-grid">
+          <div><dt>作成日</dt><dd>${h(jpDate(offsetToDate(p.createdOffset)))}</dd></div>
+          <div><dt>最終更新</dt><dd>${h(jpDate(offsetToDate(p.updatedOffset)))}</dd></div>
+          <div><dt>提出期限</dt><dd class="${deadlineColorClass(deadlineLevel(dl))}" style="font-weight:500">${h(formatDeadline(dl))}</dd></div>
+        </dl>
+      </div>
+      <!-- 「編集」「削除」は project-header.tsx:231 の isAdmin ゲート内。クライアントには出ない -->
+    </div>
+
+    <div class="panel mt-6">
+      <div class="tabs">
+        <button class="tab${state.tab === 'tasks' ? ' active' : ''}" data-tab="tasks">依頼</button>
+        <button class="tab${state.tab === 'chat' ? ' active' : ''}" data-tab="chat">チャット</button>
+        <button class="tab${state.tab === 'files' ? ' active' : ''}" data-tab="files">ファイル</button>
+      </div>
+      <div class="tab-body">
+        ${state.tab === 'tasks' ? renderTasksTab(p) : ''}
+        ${state.tab === 'chat' ? renderChatTab(p) : ''}
+        ${state.tab === 'files' ? renderFilesTab(p) : ''}
+      </div>
+    </div>
+  `;
+}
+
+function renderTasksTab(p) {
+  const rows = p.tasks.map((t, i) => {
+    const isDone = t.status === '完了';
+    const tdl = t.deadlineOffset === null || t.deadlineOffset === undefined ? null : offsetToDate(t.deadlineOffset);
+    const lvl = deadlineLevel(tdl);
+    // tasks-tab.tsx:170 canDelete = isAdmin || created_by === currentUserId
+    const canDelete = CURRENT_USER.isAdmin || t.creator === CURRENT_USER.name;
+    return `
+    <div class="task-card${isDone ? ' done' : ''}">
+      <div class="task-row">
+        <div style="min-width:0;flex:1 1 auto">
+          <span class="badge st-${h(t.status)}">${h(t.status)}</span>
+          <div class="task-title${isDone ? ' done' : ''}">${h(t.title)}</div>
+          ${t.description ? `<p class="task-desc${isDone ? ' done' : ''}">${h(t.description)}</p>` : ''}
+          <div class="task-foot">
+            ${tdl ? `<span class="${deadlineColorClass(lvl)}" style="font-weight:500;${isDone ? 'text-decoration:line-through;opacity:.6' : ''}">期限: ${h(formatDeadline(tdl))}</span>` : ''}
+            <span class="creator">作成: ${h(t.creator)}</span>
+          </div>
+        </div>
+        <div class="task-side">
+          <select class="status-select" data-task-status="${h(p.id)}:${i}">
+            ${STATUSES.map(s => `<option value="${h(s)}"${s === t.status ? ' selected' : ''}>${h(s)}</option>`).join('')}
+          </select>
+          ${canDelete ? `<button class="del-link" data-task-del="${h(p.id)}:${i}">削除</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="row-between" style="margin-bottom:16px">
+      <h4 class="section-label" style="color:var(--gray-700)">依頼一覧</h4>
+      <button class="btn-primary sm" data-act="toggle-task-form">${state.taskFormOpen ? '閉じる' : '＋ 依頼を追加'}</button>
+    </div>
+    ${state.taskFormOpen ? `
+    <form class="add-task-form" data-form="add-task">
+      <input class="inp" name="title" required placeholder="依頼のタイトル（必須）" style="margin-top:0">
+      <textarea class="inp" name="description" rows="2" placeholder="詳細（任意）" style="margin-top:0"></textarea>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:12px;line-height:16px;color:var(--gray-600)">期限</label>
+        <input class="inp" type="date" name="deadline" style="margin-top:0;width:auto;padding:6px 12px">
+      </div>
+      <div style="display:flex;justify-content:flex-end"><button type="submit" class="btn-primary md">追加</button></div>
+    </form>` : ''}
+    ${p.tasks.length === 0 ? '<p class="empty">依頼はまだありません</p>' : rows}
+  `;
+}
+
+function renderFilesTab(p) {
+  // relative_path からフォルダツリーを構築（files-tab.tsx の buildTree 相当）
+  const rootFiles = [];
+  const folders = new Map();
+  for (const f of p.files) {
+    if (!f.path || f.path.indexOf('/') === -1) { rootFiles.push(f); continue; }
+    const dir = f.path.split('/').slice(0, -1).join('/');
+    if (!folders.has(dir)) folders.set(dir, []);
+    folders.get(dir).push(f);
+  }
+  const fileRow = (f, depth) => `
+    <div class="file-row${depth > 0 ? ' child-of-folder' : ''}" style="padding-left:${12 + depth * 16}px">
+      <div class="file-main">
+        <span class="file-name"><span aria-hidden="true">📄</span><span class="t">${h(f.name)}</span></span>
+        <p class="file-sub">${h(f.by)} ・ ${h(jpDate(offsetToDate(f.atOffset)))} ・ ${h(formatFileSize(f.size))}</p>
+      </div>
+      <button class="btn-xs" data-act="noop" style="margin-left:12px">ダウンロード</button>
+    </div>`;
+
+  const folderBlocks = Array.from(folders.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([name, fs]) => `
+      <div>
+        <button class="folder-btn" data-act="noop"><span aria-hidden="true">📂</span><span>${h(name)}</span><span class="count">(${fs.length})</span></button>
+        ${fs.slice().sort((a, b) => a.name.localeCompare(b.name)).map(f => fileRow(f, 1)).join('')}
+      </div>`).join('');
+
+  return `
+    <div class="row-between" style="margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <h4 class="section-label" style="color:var(--gray-700)">ファイル一覧</h4>
+      <div style="display:flex;gap:8px">
+        <button class="btn-primary md" data-act="noop">ファイルを追加</button>
+        <button class="btn-outline-navy" data-act="noop">フォルダを追加</button>
+      </div>
+    </div>
+    <div class="dropzone">ここにファイルまたはフォルダをドラッグ&amp;ドロップ</div>
+    ${p.files.length === 0 ? '<p class="empty">まだファイルはありません</p>' : `
+      <div class="file-list">
+        ${folderBlocks}
+        ${rootFiles.slice().sort((a, b) => a.name.localeCompare(b.name)).map(f => fileRow(f, 0)).join('')}
+      </div>`}
+  `;
+}
+
+function renderChatTab(p) {
+  return `
+    <div class="chat">
+      <div class="chat-scroll" id="chat-scroll">
+        ${p.messages.length === 0 ? '<p class="empty">まだメッセージはありません</p>' : renderMessages(p)}
+      </div>
+      <div class="chat-input-row">
+        <input class="chat-input" id="chat-input" type="text" placeholder="メッセージを入力...">
+        <button class="chat-send" data-act="send" data-project="${h(p.id)}">送信</button>
+      </div>
+    </div>`;
+}
+
+function renderMessages(p) {
+  let out = '';
+  let lastDay = null;
+  const lastOwnIdx = (() => {
+    for (let i = p.messages.length - 1; i >= 0; i--) if (p.messages[i].self) return i;
+    return -1;
+  })();
+
+  p.messages.forEach((m, i) => {
+    const d = offsetToDate(m.day, m.time);
+    const dayKey = jpDate(d);
+    if (dayKey !== lastDay) {
+      // TODO: 要確認 — 実装は時刻のみ表示。日付区切りはデモの可読性のため追加
+      out += `<div class="day-sep">${h(dayKey)}</div>`;
+      lastDay = dayKey;
+    }
+    out += `
+      <div class="msg${m.self ? ' own' : ''}">
+        <div class="bubble">
+          <p class="who">${h(m.name)}</p>
+          <p class="body">${h(m.text)}</p>
+          <p class="at">${h(jpTime(d))}</p>
+        </div>
+      </div>`;
+    // TODO: 要確認 — 「既読」表示は実アプリに存在しない（messages に read_at 等なし）。デモ用に追加
+    if (i === lastOwnIdx && !p.unread) {
+      out += `<div class="read-mark">既読</div>`;
+    }
+  });
+  return out;
+}
+
+/* ---- チャット一覧（TODO: 要確認 = 実アプリに存在しない画面） ---- */
+function renderChats() {
+  const items = PROJECTS.slice()
+    .map(p => ({ p, last: lastMessage(p) }))
+    .filter(x => x.last)
+    .sort((a, b) => offsetToDate(b.last.day, b.last.time) - offsetToDate(a.last.day, a.last.time))
+    .map(({ p, last }) => {
+      const d = offsetToDate(last.day, last.time);
+      const isToday = last.day === 0;
+      return `
+      <button class="thread" data-chat="${h(p.id)}">
+        <div class="thread-main">
+          <div class="thread-title">${h(p.name)}</div>
+          <div class="thread-preview">${last.self ? '自分: ' : ''}${h(last.text)}</div>
+        </div>
+        <div class="thread-side">
+          <span class="thread-time">${h(isToday ? jpTime(d) : jpDate(d))}</span>
+          ${p.unread ? `<span class="unread-badge">${p.unread}</span>` : ''}
+        </div>
+      </button>`;
+    }).join('');
+
+  return `
+    <h2 class="page-title">チャット</h2>
+    <p class="page-sub">案件ごとのスレッド</p>
+    <!-- TODO: 要確認 — この一覧画面と未読バッジは実アプリに存在しない（チャットは案件詳細のタブのみ） -->
+    <div class="thread-list">${items}</div>
+  `;
+}
+
+/* ---- アーカイブ ---- */
+function renderArchive() {
+  return `
+    <h2 class="page-title">アーカイブ</h2>
+    <p class="page-sub">「完了」から15日経過した案件は自動的にアーカイブされます。</p>
+    <div class="mt-8 panel" style="overflow:hidden">
+      <table class="tbl">
+        <!-- 「操作」列は archive/page.tsx:63,89 の isAdmin ゲート内。クライアントには出ない -->
+        <thead><tr><th>案件名</th><th>ステータス</th><th>アーカイブ日</th></tr></thead>
+        <tbody>
+          ${ARCHIVED.map(a => `
+          <tr>
+            <td><span style="font-weight:500;color:var(--accent-text)">${h(a.name)}</span></td>
+            <td><span class="badge ar-${h(a.status)}">${h(a.status)}</span></td>
+            <td style="color:var(--gray-600)">${h(jpDate(offsetToDate(a.archivedOffset)))}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+/* ---- 設定 ---- */
+function renderSettings() {
+  return `
+    <div class="max-2xl">
+      <h2 class="page-title">設定</h2>
+      <p class="page-sub">プロフィール・パスワード・通知を変更できます。</p>
+
+      <section class="panel panel-pad mt-6">
+        <h3 style="font-size:18px;line-height:28px;font-weight:600;color:var(--gray-900)">プロフィール</h3>
+        <p class="hint" style="margin-top:4px">案件やチャットで表示される名前を変更できます。</p>
+        <div class="mt-4 field">
+          <label>表示名</label>
+          <input class="inp" value="${h(CURRENT_USER.name)}">
+        </div>
+        <button class="btn-primary md" data-act="noop">保存</button>
+      </section>
+
+      <section class="panel panel-pad mt-6">
+        <h3 style="font-size:18px;line-height:28px;font-weight:600;color:var(--gray-900)">パスワード変更</h3>
+        <p class="hint" style="margin-top:4px">現在のパスワードを確認してから、新しいパスワードに更新します。</p>
+        <div class="mt-4 field"><label>現在のパスワード</label><input class="inp" type="password"></div>
+        <div class="field"><label>新しいパスワード</label><input class="inp" type="password"></div>
+        <button class="btn-primary md" data-act="noop">変更する</button>
+      </section>
+
+      <section class="panel panel-pad mt-6">
+        <h3 style="font-size:18px;line-height:28px;font-weight:600;color:var(--gray-900)">プッシュ通知</h3>
+        <p class="hint" style="margin-top:4px">ブラウザの通知許可が必要です。拒否している場合はブラウザ設定から許可してください。</p>
+        <div class="mt-4" style="display:flex;flex-direction:column;gap:10px;font-size:14px;color:var(--gray-700)">
+          <label><input type="checkbox" checked> 通知を有効にする</label>
+          <label><input type="checkbox" checked> チャット</label>
+          <label><input type="checkbox" checked> 新規案件</label>
+          <label><input type="checkbox" checked> ステータス変更</label>
+          <label><input type="checkbox" checked> 提出期限</label>
+        </div>
+      </section>
+    </div>`;
+}
+
+/* ---- 新規案件作成モーダル ---- */
+function renderModal() {
+  return `
+  <div class="overlay" data-overlay>
+    <div class="modal">
+      <h3>新規案件作成</h3>
+      <form class="mt-4" data-form="create-project">
+        <div class="field">
+          <label>案件名 <span class="req">*</span></label>
+          <input class="inp" name="name" required placeholder="案件名を入力" value="${h(state.newProject.name)}">
+        </div>
+        <!-- 「依頼元」select は create-project-button.tsx:81 の isAdmin ゲート内。クライアントには出ない -->
+        <div class="field">
+          <label>依頼内容</label>
+          <textarea class="inp" name="description" rows="4" placeholder="依頼内容を入力（任意）">${h(state.newProject.description)}</textarea>
+        </div>
+        <div class="field">
+          <label>提出期限</label>
+          <input class="inp" type="date" name="deadline" value="${h(state.newProject.deadline)}">
+        </div>
+        <div class="field">
+          <label>依頼書類名</label>
+          <p class="hint">作成してほしい書類名を入力してください（任意、後から追加可能）</p>
+          <div style="margin-top:8px">
+            ${state.newTaskRows.map((v, i) => `
+              <div class="task-input-row">
+                <input class="inp" name="tasks" value="${h(v)}" placeholder="例：届出一覧" data-taskrow="${i}">
+                <button type="button" class="x-btn" aria-label="削除" data-remove-row="${i}">✕</button>
+              </div>`).join('')}
+            <button type="button" class="add-file-link" data-act="add-row">＋ 依頼ファイルを追加</button>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-outline" data-act="close-modal">キャンセル</button>
+          <button type="submit" class="btn-primary md">作成</button>
+        </div>
+      </form>
+    </div>
+  </div>`;
+}
+
+/* ---- 全体描画 ---- */
+let lastViewKey = null;
+function render() {
+  // 画面が変わらない再描画（タブ切替・送信など）ではスクロール位置を保つ
+  const prevMain = document.querySelector('.main');
+  const prevScroll = prevMain ? prevMain.scrollTop : 0;
+  const viewKey = state.view + ':' + (state.projectId || '');
+
+  let body = '';
+  if (state.view === 'dashboard') body = renderDashboard();
+  else if (state.view === 'project') body = renderProject();
+  else if (state.view === 'chats') body = renderChats();
+  else if (state.view === 'archive') body = renderArchive();
+  else if (state.view === 'settings') body = renderSettings();
+
+  document.getElementById('app').innerHTML = `
+    <div class="shell">
+      <header class="mobile-header">
+        <button class="burger" aria-label="メニューを開く" data-act="open-drawer">
+          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
+          </svg>
+        </button>
+        <h1>Archly</h1>
+        <div class="header-spacer"></div>
+      </header>
+
+      <div class="sidebar-desktop">${renderSidebar()}</div>
+
+      ${state.drawer ? `
+      <div class="drawer">
+        <div class="drawer-scrim" data-act="close-drawer"></div>
+        <div class="drawer-panel">${renderSidebar()}</div>
+      </div>` : ''}
+
+      <main class="main">${body}</main>
+    </div>
+    ${state.modal ? renderModal() : ''}
+  `;
+
+  const main = document.querySelector('.main');
+  if (main) main.scrollTop = viewKey === lastViewKey ? prevScroll : 0;
+  lastViewKey = viewKey;
+
+  const sc = document.getElementById('chat-scroll');
+  if (sc) sc.scrollTop = sc.scrollHeight;
+}
+
+/* ============================================================================
+   6. イベント
+   ========================================================================== */
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-nav],[data-act],[data-project],[data-tab],[data-filter],[data-chat],[data-remove-row],[data-task-del]');
+  if (!t) return;
+
+  if (t.dataset.nav) {
+    state.view = t.dataset.nav;
+    state.drawer = false;
+    if (t.dataset.nav !== 'project') { state.projectId = null; state.chatFrom = null; }
+    return render();
+  }
+  if (t.dataset.project && t.classList.contains('project-card')) {
+    state.view = 'project'; state.projectId = t.dataset.project; state.tab = 'tasks';
+    state.taskFormOpen = false; state.chatFrom = null;
+    return render();
+  }
+  if (t.dataset.chat) {
+    const p = projectById(t.dataset.chat);
+    if (p) p.unread = 0;
+    state.view = 'project'; state.projectId = t.dataset.chat; state.tab = 'chat';
+    state.chatFrom = 'chats';
+    return render();
+  }
+  if (t.dataset.tab) {
+    state.tab = t.dataset.tab;
+    if (state.tab === 'chat') { const p = projectById(state.projectId); if (p) p.unread = 0; }
+    return render();
+  }
+  if (t.dataset.filter) { state.filter = t.dataset.filter; return render(); }
+  if (t.dataset.removeRow !== undefined) {
+    const i = Number(t.dataset.removeRow);
+    syncModalFields();
+    state.newTaskRows = state.newTaskRows.length === 1 ? [''] : state.newTaskRows.filter((_, idx) => idx !== i);
+    return render();
+  }
+  if (t.dataset.taskDel) {
+    const [pid, idx] = t.dataset.taskDel.split(':');
+    const p = projectById(pid);
+    if (p && confirm('この依頼を削除しますか？')) { p.tasks.splice(Number(idx), 1); render(); }
+    return;
+  }
+
+  switch (t.dataset.act) {
+    case 'open-drawer':  state.drawer = true; return render();
+    case 'close-drawer': state.drawer = false; return render();
+    case 'open-modal':
+      state.modal = true;
+      state.newTaskRows = [''];
+      state.newProject = { name: '', description: '', deadline: '' };
+      return render();
+    case 'close-modal':  state.modal = false; return render();
+    case 'add-row':      syncModalFields(); state.newTaskRows.push(''); return render();
+    case 'toggle-task-form': state.taskFormOpen = !state.taskFormOpen; return render();
+    case 'send':         return sendMessage(t.dataset.project);
+    case 'signout':      alert('デモのためログアウトはしません。'); return;
+    case 'noop':         return;
+  }
+});
+
+// モーダル背景クリックで閉じる
+document.addEventListener('click', (e) => {
+  if (e.target.hasAttribute && e.target.hasAttribute('data-overlay')) { state.modal = false; render(); }
+});
+
+// 行の増減で再描画する際、入力済みの値を失わないように state に退避する
+function syncModalFields() {
+  const inputs = document.querySelectorAll('[data-taskrow]');
+  if (inputs.length) state.newTaskRows = Array.from(inputs).map(i => i.value);
+  const form = document.querySelector('[data-form="create-project"]');
+  if (form) {
+    state.newProject = {
+      name: form.elements.name.value,
+      description: form.elements.description.value,
+      deadline: form.elements.deadline.value,
+    };
+  }
+}
+
+// タスクのステータス変更 → 案件ステータスは computeProjectStatus で自動導出される
+document.addEventListener('change', (e) => {
+  const sel = e.target.closest('[data-task-status]');
+  if (!sel) return;
+  const [pid, idx] = sel.dataset.taskStatus.split(':');
+  const p = projectById(pid);
+  if (p) { p.tasks[Number(idx)].status = sel.value; render(); }
+});
+
+// チャット送信
+function sendMessage(pid) {
+  const input = document.getElementById('chat-input');
+  const p = projectById(pid);
+  if (!input || !p) return;
+  const value = input.value.trim();
+  if (!value) return;
+  const now = new Date();
+  p.messages.push({
+    self: true, name: CURRENT_USER.name, day: 0,
+    time: String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0'),
+    text: value,
+  });
+  p.unread = 0;
+  input.value = '';
+  render();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || e.isComposing) return;
+  if (e.target.id === 'chat-input') {
+    e.preventDefault();
+    const btn = document.querySelector('[data-act="send"]');
+    if (btn) sendMessage(btn.dataset.project);
+  }
+});
+
+// フォーム送信
+document.addEventListener('submit', (e) => {
+  const form = e.target;
+  e.preventDefault();
+
+  if (form.dataset.form === 'create-project') {
+    const fd = new FormData(form);
+    const name = String(fd.get('name') || '').trim();
+    if (!name) return;
+    const deadlineRaw = String(fd.get('deadline') || '').trim();
+    const deadlineOffset = deadlineRaw ? deadlineDiffDays(new Date(deadlineRaw)) : 14;
+    const titles = fd.getAll('tasks').map(v => String(v).trim()).filter(Boolean);
+
+    PROJECTS.unshift({
+      id: 'p-new-' + PROJECTS.length,
+      name,
+      // 非管理者の作成では client_id = 自分（＝依頼元は自分）
+      client: CURRENT_USER.name,
+      createdOffset: 0, updatedOffset: 0, deadlineOffset,
+      description: String(fd.get('description') || ''),
+      // 実装では作成時のタスクは '依頼済' で登録される（= 案件ステータスも '依頼済'）
+      tasks: titles.map(title => ({ title, description: '', status: '依頼済', deadlineOffset, creator: CURRENT_USER.name })),
+      files: [],
+      messages: [],
+      unread: 0,
+    });
+
+    state.modal = false;
+    state.view = 'dashboard';
+    state.filter = 'すべて';
+    return render();
+  }
+
+  if (form.dataset.form === 'add-task') {
+    const fd = new FormData(form);
+    const title = String(fd.get('title') || '').trim();
+    if (!title) return;
+    const deadlineRaw = String(fd.get('deadline') || '').trim();
+    const p = projectById(state.projectId);
+    if (!p) return;
+    p.tasks.push({
+      title,
+      description: String(fd.get('description') || ''),
+      status: '依頼済',
+      deadlineOffset: deadlineRaw ? deadlineDiffDays(new Date(deadlineRaw)) : null,
+      creator: CURRENT_USER.name,
+    });
+    state.taskFormOpen = false;
+    return render();
+  }
+});
+
+render();
+</script>
+</body>
+</html>

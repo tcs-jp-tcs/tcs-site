@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+.TemporaryItems
+.VolumeIcon.icns
+.AppleDouble
+.LSOverride
+Icon?
+
+# iCloud Drive
+*.icloud
+* 2
+* 2.*
+
+# エディタ / OS
+.vscode/
+.idea/
+Thumbs.db
+ehthumbs.db
+
+# 作業用（oh-my-claudecode の状態ファイル）
+.omc/
