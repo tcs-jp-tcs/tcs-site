@@ -315,6 +315,7 @@ footer{border-top:1px solid var(--ink);background:var(--paper-2)}
 .how .tagi{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--c-acc);padding-top:4px}
 .how b{display:block;font-size:15.5px;font-weight:700;margin-bottom:5px}
 .how p{margin:0;font-size:13.5px;opacity:.74;line-height:1.7}
+.how .note{display:block;margin-top:8px;padding:8px 10px;border-left:2px solid var(--c-acc);background:color-mix(in srgb,var(--c-acc) 8%,transparent);opacity:1;font-size:12.5px;line-height:1.6}
 
 .panel{border:1px solid color-mix(in srgb,var(--c-ink) 22%,transparent);border-radius:2px;padding:20px;margin-bottom:16px;background:color-mix(in srgb,var(--c-bg) 70%,transparent)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
@@ -651,7 +652,7 @@ body.intro-lock{overflow:hidden}
       <div>
         <div class="h3">使い方のしくみ</div>
         <ul class="how">
-          <li><span class="tagi">CAM</span><div><b>撮る → AIが数値を自動入力</b><p>血圧計の画面をカメラで撮影すると、Groq Vision APIが数値（上・下・脈拍）を読み取ってフォームへ自動入力。手打ち不要。<br><span style="opacity:.6">※現在、提携医療機関の関係者のみご利用いただけます。</span></p></div></li>
+          <li><span class="tagi">CAM</span><div><b>撮る → AIが数値を自動入力</b><p>血圧計の画面をカメラで撮影すると、Groq Vision APIが数値（上・下・脈拍）を読み取ってフォームへ自動入力。手打ち不要。<span class="note">※現在、提携医療機関の関係者のみご利用いただけます。</span></p></div></li>
           <li><span class="tagi">VOI</span><div><b>話す → 音声で入力</b><p>「135、85、72」と話すだけでも記録できる。撮影が難しい場面の代替入力。</p></div></li>
           <li><span class="tagi">GRA</span><div><b>貯める → グラフで見える</b><p>朝・夕の血圧の変化がひと目でわかるグラフ表示。継続記録を支援する。</p></div></li>
           <li><span class="tagi">LOC</span><div><b>守る → データは端末内に保存</b><p>記録はスマホ側にローカル保存。登録不要・インストール不要で始められる。</p></div></li>
@@ -674,7 +675,7 @@ body.intro-lock{overflow:hidden}
     </div>
 
     <div class="field">
-      <div><b>現場で使われている</b><p>提携医療機関にフライヤーを設置し、看護師から患者への案内が進行中。カメラ機能は提携医療機関の関係者向けに提供している。「作って終わり」ではなく、現場のフィードバックを受けて改善を継続。</p></div>
+      <div><b>現場で使われている</b><p>提携医療機関にフライヤーを設置し、看護師から患者への案内が進行中です。カメラ機能は提携医療機関の関係者向けに提供しています。「作って終わり」ではなく、現場のフィードバックを受けて改善を継続しています。</p></div>
       <div class="sig">Developed by TCS<br>with Claude</div>
     </div>
 
