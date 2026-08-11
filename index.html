@@ -576,13 +576,13 @@ body.intro-lock{overflow:hidden}
     </div>
     <div class="dossier">TECHNICAL DOSSIER ／ 開発と運用</div>
     <h2 class="sheet-h"><span class="nw">作って終わりではなく、</span><span class="nw"><em>AIと走らせ続ける</em>サイト。</span></h2>
-    <p class="sheet-lede">非エンジニアがClaudeと組んで開発・運用しているモータースポーツ専門メディア。全コンテンツをDB化しているので、更新はコードを書かずに「頼むだけ」。ソースはGitHubで公開しています。</p>
+    <p class="sheet-lede">非エンジニアがClaudeと組んで開発・運用しているモータースポーツ専門メディア。サイトの更新に面倒なコード変更は要りません。全コンテンツをDB化しているので、Claudeにチャットで頼むだけ。スマホからでも更新できます。</p>
 
     <div class="metrics">
-      <dl class="metric"><dt>REPOSITORY</dt><dd>PUBLIC</dd><div class="sub">GitHub 公開</div></dl>
-      <dl class="metric"><dt>DEPLOYMENTS</dt><dd>157</dd><div class="sub">Vercel production</div></dl>
-      <dl class="metric"><dt>CONTRIBUTORS</dt><dd>2</dd><div class="sub">human × AI</div></dl>
-      <dl class="metric"><dt>LANGUAGE</dt><dd>62<small>%</small></dd><div class="sub">TypeScript</div></dl>
+      <dl class="metric"><dt>TYPE</dt><dd>WEB MEDIA</dd><div class="sub">モータースポーツ専門</div></dl>
+      <dl class="metric"><dt>構成</dt><dd>DB連動</dd><div class="sub">全コンテンツ</div></dl>
+      <dl class="metric"><dt>更新</dt><dd>自動</dd><div class="sub">1日3回 取り込み</div></dl>
+      <dl class="metric"><dt>対象</dt><dd>5</dd><div class="sub">F1・F2・F3・SF・INDY</div></dl>
     </div>
 
     <div class="cols">
@@ -591,7 +591,7 @@ body.intro-lock{overflow:hidden}
         <ul class="how">
           <li><span class="tagi">AUTO</span><div><b>ニュースは自動で最新に</b><p>Claude Coworkがニュースの取り込みを1日3回、自動実行。人が張り付かなくても、サイトが常に最新のレース情報に保たれる。</p></div></li>
           <li><span class="tagi">ASK</span><div><b>結果・記事は「頼むだけ」</b><p>レース結果や順位の更新は、スマホからでも「反映して」と頼めばOK。DB化しているので再デプロイもいらない。</p></div></li>
-          <li><span class="tagi">CODE</span><div><b>機能追加はAIと実装</b><p>レイアウト変更や新機能はClaude Codeで実装してデプロイ。157回のデプロイはこの積み重ね。</p></div></li>
+          <li><span class="tagi">CODE</span><div><b>機能追加はAIと実装</b><p>レイアウト変更や新機能はClaude Codeで実装してデプロイ。思いついたその日に反映できる。</p></div></li>
         </ul>
       </div>
       <div>
@@ -641,10 +641,10 @@ body.intro-lock{overflow:hidden}
     <p class="sheet-lede">血圧計をカメラで撮影するとAIが数値を読み取って自動入力するPWA。インストール不要でスマホのホーム画面に追加でき、データは端末内に保存。提携医療機関で実証中です。</p>
 
     <div class="metrics">
-      <dl class="metric"><dt>PLATFORM</dt><dd>PWA</dd><div class="sub">インストール不要</div></dl>
-      <dl class="metric"><dt>DEPLOYMENTS</dt><dd>79</dd><div class="sub">Vercel production</div></dl>
+      <dl class="metric"><dt>TYPE</dt><dd>PWA</dd><div class="sub">インストール不要</div></dl>
       <dl class="metric"><dt>読み取り</dt><dd>AI OCR</dd><div class="sub">Groq Vision API</div></dl>
-      <dl class="metric"><dt>MAIN LANGUAGE</dt><dd>99<small>%</small></dd><div class="sub">JavaScript</div></dl>
+      <dl class="metric"><dt>入力</dt><dd>CAM / VOICE</dd><div class="sub">撮る・話す</div></dl>
+      <dl class="metric"><dt>データ</dt><dd>端末内</dd><div class="sub">サーバー送信なし</div></dl>
     </div>
 
     <div class="cols">
@@ -699,9 +699,9 @@ body.intro-lock{overflow:hidden}
 
     <div class="metrics">
       <dl class="metric"><dt>TYPE</dt><dd>DESKTOP</dd><div class="sub">Electron / Windows</div></dl>
-      <dl class="metric"><dt>DEPLOYMENTS</dt><dd>259</dd><div class="sub">Vercel / CI</div></dl>
-      <dl class="metric"><dt>RELEASES</dt><dd>17</dd><div class="sub">latest v1.1.1</div></dl>
-      <dl class="metric"><dt>MAIN LANGUAGE</dt><dd>99<small>%</small></dd><div class="sub">TypeScript</div></dl>
+      <dl class="metric"><dt>作成</dt><dd>自動</dd><div class="sub">ボタンひとつ</div></dl>
+      <dl class="metric"><dt>連携</dt><dd>EXCEL</dd><div class="sub">読み込み・書き出し</div></dl>
+      <dl class="metric"><dt>導入</dt><dd>医療機関</dd><div class="sub">運用中</div></dl>
     </div>
 
     <div class="cols">
@@ -761,10 +761,10 @@ body.intro-lock{overflow:hidden}
     <p class="sheet-lede">クライアントからの依頼・チャット・ファイル共有・進捗管理をひとつに集約するツール。権限管理はデータベース側の行レベルセキュリティで作り込んでいます。</p>
 
     <div class="metrics">
-      <dl class="metric"><dt>TYPE</dt><dd>PWA / WEB</dd><div class="sub">インストール可</div></dl>
-      <dl class="metric"><dt>DEPLOYMENTS</dt><dd>42</dd><div class="sub">Vercel production</div></dl>
-      <dl class="metric"><dt>SECURITY</dt><dd>RLS</dd><div class="sub">Supabase / PLpgSQL</div></dl>
-      <dl class="metric"><dt>MAIN LANGUAGE</dt><dd>96<small>%</small></dd><div class="sub">TypeScript</div></dl>
+      <dl class="metric"><dt>TYPE</dt><dd>PWA・WEB</dd><div class="sub">インストール可</div></dl>
+      <dl class="metric"><dt>管理</dt><dd>案件単位</dd><div class="sub">依頼から完了まで</div></dl>
+      <dl class="metric"><dt>共有</dt><dd>ONEDRIVE</dd><div class="sub">ファイル連携</div></dl>
+      <dl class="metric"><dt>権限</dt><dd>RLS</dd><div class="sub">Supabase・PLpgSQL</div></dl>
     </div>
 
     <div class="cols">
