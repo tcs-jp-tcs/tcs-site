@@ -143,18 +143,6 @@ h1 em{font-style:normal;color:var(--shu)}
 .nw{display:inline-block}
 .lede{font-size:clamp(15px,1.6vw,17px);max-width:40em;color:var(--ink-60);margin:0 0 44px}
 
-.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--ink)}
-.stat{padding:20px 0 4px;border-right:1px solid var(--line)}
-.stat:last-child{border-right:0}
-.stat b{display:block;font-family:var(--dis);font-weight:700;font-size:clamp(36px,6vw,56px);line-height:1;letter-spacing:-.01em}
-.stat span{display:block;font-size:12px;color:var(--ink-60);margin-top:8px;padding-right:12px}
-@media(max-width:640px){
-  .stats{grid-template-columns:1fr}
-  .stat{border-right:0;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:16px;padding:14px 0}
-  .stat b{font-size:34px}
-  .stat span{margin-top:0}
-}
-
 /* ---------- WORKS ---------- */
 .section{padding:clamp(48px,8vw,92px) 0}
 .sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:32px;flex-wrap:wrap}
@@ -432,11 +420,6 @@ body.intro-lock{overflow:hidden}
       ひとりでAIと組んで、現場で実際に使われるものをつくっています。
       納品して終わりではなく、使われている場所で改善を続けているのが、ここに並ぶ4つです。
     </p>
-    <div class="stats">
-      <div class="stat"><b>4</b><span>稼働中のプロダクト</span></div>
-      <div class="stat"><b>537</b><span>累計デプロイ（4製品合計・GitHub / Vercel 実測）</span></div>
-      <div class="stat"><b>2</b><span>医療機関で運用・実証中のアプリ</span></div>
-    </div>
   </section>
 
   <section class="section" id="works">
