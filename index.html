@@ -82,7 +82,7 @@
 }
 
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 body{
   margin:0;
   font-family:var(--jp);
@@ -117,8 +117,13 @@ img{max-width:100%;display:block}
 .brand-txt{font-size:12px;line-height:1.4;min-width:0}
 .brand-txt b{font-family:var(--dis);font-size:17px;letter-spacing:.12em;font-weight:700;display:block}
 .brand-txt span{color:var(--ink-60)}
-.sheet-no{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--ink-60);white-space:nowrap}
-@media(max-width:560px){.sheet-no{display:none}}
+.topnav{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--ink-60);white-space:nowrap}
+.topnav a{color:inherit;text-decoration:none}
+.topnav a:hover{color:var(--shu)}
+.topnav a:focus-visible{outline:2px solid var(--shu);outline-offset:3px}
+.topnav .sep{opacity:.45}
+#works,#service,#about,#contact{scroll-margin-top:calc(var(--hdr) + 10px)}
+@media(max-width:560px){.topnav{display:none}}
 
 /* ---------- HERO ---------- */
 .hero{padding:clamp(56px,10vw,116px) 0 clamp(40px,7vw,76px)}
@@ -388,7 +393,7 @@ footer{border-top:1px solid var(--ink);background:var(--paper-2)}
 body.intro-lock{overflow:hidden}
 @media(prefers-reduced-motion:reduce){#intro{display:none}}
 
-@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
@@ -411,7 +416,9 @@ body.intro-lock{overflow:hidden}
         <span>アプリ開発・AI活用支援</span>
       </span>
     </button>
-    <div class="sheet-no">PORTFOLIO ／ WORKS 01–04</div>
+    <nav class="topnav" aria-label="セクション">
+      <a href="#works">WORKS</a><span class="sep" aria-hidden="true">／</span><a href="#service">SERVICE</a><span class="sep" aria-hidden="true">／</span><a href="#about">ABOUT</a><span class="sep" aria-hidden="true">／</span><a href="#contact">CONTACT</a>
+    </nav>
   </div>
 </div>
 
@@ -488,7 +495,7 @@ body.intro-lock{overflow:hidden}
   </section>
 
 
-  <section class="section svc">
+  <section class="section svc" id="service">
     <div class="sec-head">
       <h2>SERVICE ／ できること</h2>
       <p>手間がかかっている場所から。</p>
@@ -530,7 +537,7 @@ body.intro-lock{overflow:hidden}
     </div>
   </section>
 
-  <section class="section about">
+  <section class="section about" id="about">
     <div>
       <h3>ABOUT</h3>
       <p>もともとは現場の人間です。解体工事の施工管理を約11年。工程を組み、現場を回し、人と段取りを動かしてきました。あわせて社内・社外での講師も務めています。</p>
@@ -552,7 +559,7 @@ body.intro-lock{overflow:hidden}
     </div>
   </section>
 
-  <section class="contact">
+  <section class="contact" id="contact">
     <div class="eyebrow">CONTACT</div>
     <a href="mailto:info.tcsjp@gmail.com">info.tcsjp@gmail.com</a>
   </section>
@@ -958,6 +965,7 @@ body.intro-lock{overflow:hidden}
     if(document.querySelector('.sheet.open'))closeAll();
     else window.scrollTo({top:0,behavior:'smooth'});
   });
+  document.querySelectorAll('.topnav a').forEach(function(a){a.addEventListener('click',closeAll)});
   // ---- Archly デモ（埋め込み・オフライン） ----
   var modal=document.getElementById('demo-modal'),
       frame=document.getElementById('demo-frame'),
